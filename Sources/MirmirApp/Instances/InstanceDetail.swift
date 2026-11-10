@@ -1,0 +1,109 @@
+import MirmirKit
+import SwiftUI
+
+struct InstanceDetail: View {
+    @Environment(AppModel.self) private var model
+    let record: InstanceRecord
+
+    var body: some View {
+        let summary = model.summary(for: record)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(heading).sectionLabel(Palette.signal)
+                    Text(record.name).font(.system(size: 17, weight: .semibold))
+                    if case .online(let health) = summary.status {
+                        Text("mirmir \(health.serverVersion) · protocol \(health.protocolVersion)")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                }
+                rows(summary)
+                if !summary.loadedModels.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Loaded models").font(.system(size: 12, weight: .semibold))
+                        ForEach(summary.loadedModels, id: \.self) { selector in
+                            HStack(spacing: 8) {
+                                StatusDot(color: Palette.signal, size: 6)
+                                Text(selector).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                            }
+                        }
+                    }
+                    .card(padding: 12)
+                }
+                actions
+                if record.isThisMac { RemoteAccessNote() }
+            }
+            .padding(16)
+        }
+    }
+
+    private var heading: String {
+        switch record.target {
+        case .personal: "LOCAL · personal socket"
+        case .system: "LOCAL · system socket"
+        case .socket: "LOCAL · Unix socket"
+        case .remote: "REMOTE · gRPC + TLS"
+        }
+    }
+
+    private func rows(_ summary: InstanceSummary) -> some View {
+        VStack(spacing: 0) {
+            row("Address", model.address(of: record))
+            Divider()
+            row("Status", summary.status.label)
+            Divider()
+            row("Authentication", record.target.kind.isLocal ? "socket permissions" : "API key (planned)")
+            if let uptime = summary.telemetry?.uptime {
+                Divider()
+                row("Uptime", Format.duration(uptime))
+            }
+            if let device = summary.telemetry?.deviceName, !device.isEmpty {
+                Divider()
+                row("Device", device)
+            }
+        }
+        .card(padding: 0)
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.system(size: 12)).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).font(.mono(11)).lineLimit(1).truncationMode(.middle)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+    }
+
+    @ViewBuilder private var actions: some View {
+        if record.id == model.currentInstanceID {
+            Button("Open Dashboard") { model.section = .overview }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+        } else {
+            Button("Connect and Open Dashboard") {
+                model.select(instance: record.id)
+                model.section = .overview
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+        }
+        if !record.isThisMac {
+            Button("Remove Instance", role: .destructive) { model.remove(instance: record.id) }
+                .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// Remote access to this Mac needs the server-side TLS listener and keys.
+struct RemoteAccessNote: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Remote access is off").font(.system(size: 12, weight: .semibold))
+            Text("Other Macs cannot control this one yet. Remote access needs mirmir's TLS listener and API keys, which are planned but not released.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(Palette.raised, in: RoundedRectangle(cornerRadius: 8))
+    }
+}

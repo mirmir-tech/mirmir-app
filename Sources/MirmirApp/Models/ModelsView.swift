@@ -1,0 +1,146 @@
+import MirmirKit
+import SwiftUI
+
+enum ModelFilter: String, CaseIterable, Identifiable {
+    case all = "All", ready = "Ready", downloads = "Downloads"
+    var id: String { rawValue }
+}
+
+struct ModelsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var selection: String?
+    @State private var query = ""
+    @State private var filter: ModelFilter = .all
+    @State private var showInspector = true
+    @State private var showDownload = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if filter == .downloads {
+                DownloadsList()
+            } else {
+                table
+            }
+        }
+        .navigationTitle("Models")
+        .searchable(text: $query, placement: .toolbar, prompt: "Search")
+        .toolbar {
+            ToolbarItem {
+                Picker("Filter", selection: $filter) {
+                    ForEach(ModelFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+            ToolbarItem {
+                Button { showDownload = true } label: { Label("Download", systemImage: "arrow.down.circle") }
+            }
+            ToolbarItem {
+                Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.trailing") }
+            }
+        }
+        .inspector(isPresented: $showInspector) {
+            Group {
+                if let selection, let local = model.model(selector: selection) {
+                    ModelInspector(local: local)
+                } else {
+                    EmptyState(title: "No selection", message: "Select a model to inspect it.", symbol: "shippingbox")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Palette.canvas)
+            .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
+        }
+        .sheet(isPresented: $showDownload) { DownloadSheet() }
+        .onAppear { selection = selection ?? model.primaryModel?.selector }
+    }
+
+    private var rows: [LocalModel] {
+        model.models
+            .filter { filter != .ready || [.available, .loaded].contains(model.displayState(of: $0)) }
+            .filter { query.isEmpty || $0.repoID.localizedCaseInsensitiveContains(query) || $0.selector.localizedCaseInsensitiveContains(query) }
+            .sorted { lhs, rhs in
+                let left = model.displayState(of: lhs) == .loaded, right = model.displayState(of: rhs) == .loaded
+                if left != right { return left }
+                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+    }
+
+    private var table: some View {
+        Table(rows, selection: $selection) {
+            TableColumn("Name") { local in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(local.displayName).fontWeight(.medium)
+                    Text([local.owner, local.modelClass, local.encoding].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 3)
+            }
+            TableColumn("Features") { local in FeatureChips(features: local.features) }
+                .width(min: 120, ideal: 170)
+            TableColumn("Size") { local in Text(Format.bytes(local.sizeBytes)).font(.mono(12)) }
+                .width(80)
+            TableColumn("Status") { local in ModelStatus(local: local) }
+                .width(min: 120, ideal: 170)
+        }
+        .alternatingRowBackgrounds(.disabled)
+        .paletteBackground()
+        .overlay {
+            if model.models.isEmpty {
+                EmptyState(title: "No local models", message: "Download a checkpoint from Hugging Face to get started.", symbol: "shippingbox")
+            }
+        }
+    }
+}
+
+struct ModelStatus: View {
+    @Environment(AppModel.self) private var model
+    let local: LocalModel
+
+    var body: some View {
+        if let load = model.loads[local.selector] {
+            HStack(spacing: 6) {
+                if let fraction = load.fraction {
+                    ProgressView(value: fraction).frame(width: 60)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+                Text(load.phase.replacingOccurrences(of: "_", with: " ")).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        } else if case .unavailable(let reason) = local.loadability {
+            Pill(text: reason.isEmpty ? "Unsupported" : reason, color: Palette.danger).help(reason).lineLimit(1)
+        } else {
+            Pill(text: model.displayState(of: local).label, color: model.displayState(of: local).color)
+        }
+    }
+}
+
+/// Active Hugging Face transfers.
+struct DownloadsList: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let transfers = model.transfers.values.sorted { $0.repoID < $1.repoID }
+        if transfers.isEmpty {
+            EmptyState(title: "No downloads", message: "Downloads started from this app appear here.", symbol: "arrow.down.circle")
+        } else {
+            List(transfers, id: \.repoID) { transfer in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(transfer.repoID).fontWeight(.medium)
+                        Spacer()
+                        Text(transfer.phase.label).foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: transfer.fraction ?? 0)
+                    Text(progressText(transfer)).font(.mono(11)).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+            .paletteBackground()
+        }
+    }
+
+    private func progressText(_ transfer: TransferProgress) -> String {
+        let total = transfer.totalBytes.map { " / \(Format.bytes($0))" } ?? ""
+        return "\(Format.bytes(transfer.downloadedBytes))\(total)"
+    }
+}
