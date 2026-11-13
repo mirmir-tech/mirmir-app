@@ -23,11 +23,23 @@ extension AppModel {
         if modelFolders.huggingFaceCache != before { restartServer() }
     }
 
-    /// Loads the model in a folder the user chose. The folder stays granted,
-    /// so the server can restore the model on the next launch.
+    /// Whether a folder on this Mac can be loaded: only into the app's own
+    /// server. A remote server cannot read this Mac's paths.
+    public var canLoadLocalFolders: Bool {
+        currentInstance.isThisMac && connection != nil
+    }
+
+    /// Loads the model in a folder the user chose into the app's own server.
+    /// The folder stays granted, so the server can restore the model on the
+    /// next launch. Never sends a path on this Mac to a remote server.
     public func loadModel(at url: URL) {
-        guard addModelFolder(url) != nil else { return }
-        load(url.path)
+        guard canLoadLocalFolders else {
+            notice = "Models in a folder on this Mac load only on This Mac. Switch to This Mac first."
+            return
+        }
+        guard let folder = addModelFolder(url) else { return }
+        // A Hugging Face cache is not a checkpoint: its models are listed.
+        if case .folder = folder.kind { load(folder.path) }
     }
 
     /// Restarts the bundled server with the current folders; a server this

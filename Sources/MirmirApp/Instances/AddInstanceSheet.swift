@@ -14,13 +14,11 @@ struct AddInstanceSheet: View {
     @State private var caIssued = false
     @State private var presented: CertificateFingerprint?
     @State private var trusted = false
-    @State private var test: TestResult?
+    @State private var test: RemoteTestResult?
+    /// Identifies the test in flight; a completion from an older one, run
+    /// with inputs edited since, is discarded.
+    @State private var testRun = 0
     @State private var testing = false
-
-    enum TestResult {
-        case passed(ServerHealth, models: Int)
-        case failed(String)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -33,12 +31,13 @@ struct AddInstanceSheet: View {
             .scrollContentBackground(.hidden)
             .onChange(of: address) { resetCheck() }
             .onChange(of: caIssued) { resetCheck() }
+            .onChange(of: candidate) { if test?.candidate != candidate { test = nil } }
             testView
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(test == nil ? "Test Connection" : "Test Again", action: runTest)
-                    .disabled(target == nil || testing || key.isEmpty)
+                    .disabled(RemoteEndpoint(address: address) == nil || testing || key.isEmpty)
                 Button("Add Server", action: add)
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canAdd)
@@ -70,7 +69,7 @@ struct AddInstanceSheet: View {
         if testing {
             ProgressView(readingCertificate ? "Reading the certificate…" : "Testing…").controlSize(.small)
         } else if let test {
-            switch test {
+            switch test.outcome {
             case .passed(let health, let models):
                 Label("Reachable · mirmir \(health.serverVersion) · protocol compatible · \(models) local models", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(Palette.success).font(.system(size: 12))
@@ -89,57 +88,61 @@ struct AddInstanceSheet: View {
         RemoteEndpoint(address: address)?.host.split(separator: ".").first.map(String.init) ?? "Remote"
     }
 
-    /// The endpoint with the certificate the user trusted, if any.
-    private var endpoint: RemoteEndpoint? {
-        guard var endpoint = RemoteEndpoint(address: address) else { return nil }
-        endpoint.pinnedFingerprint = caIssued ? nil : (trusted ? presented : nil)
-        return endpoint
+    /// The current inputs, with the certificate the user trusted, if any.
+    private var candidate: RemoteCandidate? {
+        RemoteCandidate(address: address, key: key, pinned: caIssued ? nil : (trusted ? presented : nil))
     }
 
-    private var target: InstanceTarget? {
-        endpoint.map(InstanceTarget.remote)
+    /// A remote server is saved only after a test passed with exactly these
+    /// inputs, so its pinned certificate and key are known to work.
+    private var approved: RemoteCandidate? {
+        test?.approved(for: candidate, testing: testing)
     }
 
-    /// A remote server is saved only after a passing test, so its pinned
-    /// certificate and key are known to work.
-    private var canAdd: Bool {
-        guard target != nil else { return false }
-        if case .passed = test { return true }
-        return false
-    }
+    private var canAdd: Bool { approved != nil }
 
     private func add() {
-        guard let target else { return }
-        let record = InstanceRecord(name: name.isEmpty ? defaultName : name, target: target)
-        model.add(record, key: key.trimmingCharacters(in: .whitespaces))
+        guard let approved else { return }
+        let record = InstanceRecord(name: name.isEmpty ? defaultName : name, target: .remote(approved.endpoint))
+        model.add(record, key: approved.key)
         dismiss()
     }
 
+    /// A new address or trust mode needs its certificate read again; any
+    /// test in flight is superseded.
     private func resetCheck() {
         presented = nil
         trusted = false
         test = nil
+        testRun += 1
+        testing = false
     }
 
     private func runTest() {
-        guard let target else { return }
+        guard let candidate else { return }
+        testRun += 1
+        let run = testRun
+        let readsCertificate = readingCertificate
         testing = true
         test = nil
         Task {
-            defer { testing = false }
+            // Applies a result only while this is the latest test and the
+            // inputs are the ones it ran with.
+            @MainActor func current() -> Bool { run == testRun && candidate == self.candidate }
+            defer { if run == testRun { testing = false } }
             do {
-                guard case .remote(let endpoint) = target else { return }
-                if readingCertificate {
-                    presented = try await RuntimeConnection.presentedFingerprint(of: endpoint)
+                if readsCertificate {
+                    let fingerprint = try await RuntimeConnection.presentedFingerprint(of: candidate.endpoint)
+                    if current() { presented = fingerprint }
                     return
                 }
                 if !caIssued, !trusted { return }
-                let connection = try await RuntimeConnection.connect(remote: endpoint, key: key.trimmingCharacters(in: .whitespaces))
+                let connection = try await RuntimeConnection.connect(remote: candidate.endpoint, key: candidate.key)
                 let models = (try? await connection.localModels().count) ?? 0
-                test = .passed(connection.health, models: models)
                 connection.close()
+                if current() { test = RemoteTestResult(candidate: candidate, outcome: .passed(connection.health, models: models)) }
             } catch {
-                test = .failed(error.localizedDescription)
+                if current() { test = RemoteTestResult(candidate: candidate, outcome: .failed(error.localizedDescription)) }
             }
         }
     }

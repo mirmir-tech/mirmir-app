@@ -33,25 +33,38 @@ public struct ModelFolder: Identifiable, Hashable, Sendable, Codable {
     }
 }
 
+/// Why a granted folder cannot be read on this launch; the user grants it
+/// again to fix it.
+public enum FolderAccessFailure: Error, Hashable, Sendable {
+    /// The bookmark no longer resolves: the folder or its volume is gone.
+    case unresolvable(String)
+    /// macOS refused to open the folder's security scope.
+    case refused
+}
+
 /// The folders granted to the app, persisted with their bookmarks. Access is
 /// started on load, before the app starts its server, so a model restored
-/// from such a folder is readable.
+/// from such a folder is readable. A folder that moved is recorded at its
+/// new location, and a stale bookmark is renewed.
 @MainActor
 @Observable
 public final class ModelFolders {
     public private(set) var folders: [ModelFolder]
+    /// Granted folders that cannot be read on this launch.
+    public private(set) var failures: [UUID: FolderAccessFailure] = [:]
     @ObservationIgnored private let file: JSONFile<[ModelFolder]>
-    @ObservationIgnored private var accessed: [String: URL] = [:]
+    @ObservationIgnored private var accessed: [UUID: URL] = [:]
 
     public init(file: JSONFile<[ModelFolder]> = JSONFile(name: "model-folders.json")) {
         self.file = file
         folders = file.load() ?? []
-        for folder in folders { startAccess(folder) }
+        reopen()
     }
 
-    /// The Hugging Face cache the server lists models from: the first granted.
+    /// The Hugging Face cache the server lists models from: the first granted
+    /// one that is readable.
     public var huggingFaceCache: String? {
-        folders.lazy.compactMap { folder -> String? in
+        folders.lazy.filter { self.failures[$0.id] == nil }.compactMap { folder -> String? in
             if case .huggingFaceCache(let hub) = folder.kind { hub } else { nil }
         }.first
     }
@@ -65,28 +78,63 @@ public final class ModelFolders {
     /// active for this launch and the bookmark renews it on the next.
     @discardableResult
     public func add(_ url: URL) throws -> ModelFolder {
-        if let existing = folders.first(where: { $0.path == url.path }) { return existing }
+        if let existing = folders.first(where: { $0.path == url.path }) {
+            guard failures[existing.id] != nil else { return existing }
+            // Granted again after it could not be opened: a fresh bookmark.
+            remove(existing.id)
+        }
         let folder = ModelFolder(id: UUID(), path: url.path, kind: ModelFolder.kind(of: url), bookmark: try Self.bookmark(url))
-        accessed[folder.path] = url
+        accessed[folder.id] = url
         folders.append(folder)
         persist()
         return folder
     }
 
     public func remove(_ id: UUID) {
-        guard let folder = folders.first(where: { $0.id == id }) else { return }
-        if let url = accessed.removeValue(forKey: folder.path) { Self.stopAccess(url) }
+        guard folders.contains(where: { $0.id == id }) else { return }
+        if let url = accessed.removeValue(forKey: id) { Self.stopAccess(url) }
+        failures[id] = nil
         folders.removeAll { $0.id == id }
         persist()
     }
 
-    private func startAccess(_ folder: ModelFolder) {
+    /// Opens every folder's grant and reconciles moved folders and stale
+    /// bookmarks into the persisted records.
+    private func reopen() {
+        var changed = false
+        folders = folders.map { folder in
+            switch Self.open(folder) {
+            case .success(let (url, renewed)):
+                accessed[folder.id] = url
+                // The same folder spelled through a symlink (`/var`) has not moved.
+                let moved = url.resolvingSymlinksInPath().path != URL(fileURLWithPath: folder.path).resolvingSymlinksInPath().path
+                guard renewed != nil || moved else { return folder }
+                changed = true
+                return ModelFolder(id: folder.id, path: url.path, kind: ModelFolder.kind(of: url), bookmark: renewed ?? folder.bookmark)
+            case .failure(let failure):
+                failures[folder.id] = failure
+                return folder
+            }
+        }
+        if changed { persist() }
+    }
+
+    /// The folder's current location with its access started, and a renewed
+    /// bookmark when macOS reports the stored one as stale.
+    private static func open(_ folder: ModelFolder) -> Result<(URL, Data?), FolderAccessFailure> {
         #if os(macOS)
         var stale = false
-        guard let url = try? URL(resolvingBookmarkData: folder.bookmark, options: .withSecurityScope,
-                                 relativeTo: nil, bookmarkDataIsStale: &stale),
-              url.startAccessingSecurityScopedResource() else { return }
-        accessed[folder.path] = url
+        let url: URL
+        do {
+            url = try URL(resolvingBookmarkData: folder.bookmark, options: .withSecurityScope,
+                          relativeTo: nil, bookmarkDataIsStale: &stale)
+        } catch {
+            return .failure(.unresolvable(error.localizedDescription))
+        }
+        guard url.startAccessingSecurityScopedResource() else { return .failure(.refused) }
+        return .success((url, stale ? try? bookmark(url) : nil))
+        #else
+        return .success((URL(fileURLWithPath: folder.path), nil))
         #endif
     }
 

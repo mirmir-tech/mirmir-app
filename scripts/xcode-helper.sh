@@ -146,4 +146,13 @@ PLIST
     mkdir -p "$DERIVED_FILE_DIR"
     echo "$digest" > "$stamp"
 fi
-echo "embedded $("$helpers/mirmir" --version) with MLX $MLX_VERSION"
+# The helper inherits the app's sandbox, so it runs only as the app's child
+# (alone it traps) and cannot be probed here. Check what can be: every piece
+# is signed, and the helper links nothing outside the bundle.
+for piece in "$frameworks/libjaccl.dylib" "$framework" "$helpers/mirmir"; do
+    codesign --verify --strict "$piece" || { echo "error: $piece is not validly signed" >&2; exit 1; }
+done
+codesign -d --entitlements - "$helpers/mirmir" 2>/dev/null | grep -q "com.apple.security.inherit" \
+    || { echo "error: the embedded mirmir does not inherit the app's sandbox" >&2; exit 1; }
+version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$crate/Cargo.toml" | head -n 1)"
+echo "embedded mirmir $version with MLX $MLX_VERSION (not launched: it runs only inside the app)"

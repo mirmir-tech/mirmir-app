@@ -43,7 +43,34 @@ struct ModelFolderTests {
         #expect(ModelFolders(file: file).folders.isEmpty)
     }
 
-    @Test func onlyTheBundledServerIsUsed() {
+    @Test func aMovedCacheIsFollowedAndAMissingOneIsReported() throws {
+        let root = try scratch(), store = try scratch()
+        defer { try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: store) }
+        let original = root.appendingPathComponent("huggingface")
+        let gone = root.appendingPathComponent("gone")
+        try FileManager.default.createDirectory(at: original.appendingPathComponent("hub/models--a--b"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: gone, withIntermediateDirectories: true)
+        let file = JSONFile<[ModelFolder]>(name: "model-folders.json", directory: store)
+        let folders = ModelFolders(file: file)
+        let cache = try folders.add(original)
+        let missing = try folders.add(gone)
+
+        let moved = root.appendingPathComponent("renamed")
+        try FileManager.default.moveItem(at: original, to: moved)
+        try FileManager.default.removeItem(at: gone)
+        let reloaded = ModelFolders(file: file)
+        func real(_ path: String) -> String { URL(fileURLWithPath: path).resolvingSymlinksInPath().path }
+
+        let followed = try #require(reloaded.folders.first { $0.id == cache.id })
+        #expect(real(followed.path) == real(moved.path))
+        #expect(reloaded.serverEnvironment["HF_HUB_CACHE"].map(real) == real(moved.appendingPathComponent("hub").path))
+        #expect(reloaded.failures[cache.id] == nil)
+        #expect(reloaded.failures[missing.id] != nil)
+        // The move is persisted for the next launch.
+        #expect(ModelFolders(file: file).folders.first { $0.id == cache.id }.map { real($0.path) } == real(moved.path))
+    }
+
+        @Test func onlyTheBundledServerIsUsed() {
         #expect(ServerBinary.resolve(bundle: Bundle(for: BundleMarker.self)) == nil)
         #expect(ServerBinary.bundled(in: .main).path.hasSuffix("Contents/Helpers/mirmir"))
     }

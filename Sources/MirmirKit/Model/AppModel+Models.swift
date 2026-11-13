@@ -81,12 +81,12 @@ extension AppModel {
         Task {
             do {
                 try await connection.load(selector: selector) { progress in
-                    await self.setLoad(selector, progress)
+                    await self.setLoad(selector, progress, from: connection)
                 }
             } catch {
-                report(error, "Loading \(selector) failed")
+                report(error, "Loading \(selector) failed", from: connection)
             }
-            loads[selector] = nil
+            if isCurrent(connection) { loads[selector] = nil }
             try? await refreshModels(connection)
         }
     }
@@ -97,9 +97,9 @@ extension AppModel {
             do {
                 _ = try await connection.unload(selector: selector)
             } catch {
-                report(error, "Unloading \(selector) failed")
+                report(error, "Unloading \(selector) failed", from: connection)
             }
-            inspections[selector] = nil
+            if isCurrent(connection) { inspections[selector] = nil }
             try? await refreshModels(connection)
         }
     }
@@ -107,10 +107,11 @@ extension AppModel {
     public func inspect(_ selector: String) async {
         guard let connection else { return }
         do {
-            inspections[selector] = try await connection.inspect(selector: selector)
+            let inspection = try await connection.inspect(selector: selector)
+            if isCurrent(connection) { inspections[selector] = inspection }
         } catch {
             guard !isPreview else { return }
-            report(error, "Inspecting \(selector) failed")
+            report(error, "Inspecting \(selector) failed", from: connection)
         }
     }
 
@@ -118,9 +119,10 @@ extension AppModel {
         guard let connection else { return }
         do {
             try await connection.updateSettings(selector: selector, settings: settings)
-            inspections[selector] = try await connection.inspect(selector: selector)
+            let inspection = try await connection.inspect(selector: selector)
+            if isCurrent(connection) { inspections[selector] = inspection }
         } catch {
-            report(error, "Saving settings failed")
+            report(error, "Saving settings failed", from: connection)
         }
     }
 
@@ -135,12 +137,12 @@ extension AppModel {
         Task {
             do {
                 try await connection.pull(repoID: repoID) { progress in
-                    await self.setTransfer(repoID, progress)
+                    await self.setTransfer(repoID, progress, from: connection)
                 }
             } catch {
-                report(error, "Downloading \(repoID) failed")
+                report(error, "Downloading \(repoID) failed", from: connection)
             }
-            transfers[repoID] = nil
+            if isCurrent(connection) { transfers[repoID] = nil }
             try? await refreshModels(connection)
         }
     }
@@ -151,7 +153,7 @@ extension AppModel {
             do {
                 _ = try await connection.remove(repoID: repoID)
             } catch {
-                report(error, "Removing \(repoID) failed")
+                report(error, "Removing \(repoID) failed", from: connection)
             }
             try? await refreshModels(connection)
         }
@@ -162,11 +164,11 @@ extension AppModel {
         Task { _ = try? await connection.cancel(operationID: activity.id) }
     }
 
-    func setLoad(_ selector: String, _ progress: LoadProgress) {
-        loads[selector] = progress
+    func setLoad(_ selector: String, _ progress: LoadProgress, from connection: RuntimeConnection) {
+        if isCurrent(connection) { loads[selector] = progress }
     }
 
-    func setTransfer(_ repoID: String, _ progress: TransferProgress) {
-        transfers[repoID] = progress
+    func setTransfer(_ repoID: String, _ progress: TransferProgress, from connection: RuntimeConnection) {
+        if isCurrent(connection) { transfers[repoID] = progress }
     }
 }

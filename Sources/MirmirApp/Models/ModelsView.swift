@@ -57,9 +57,11 @@ struct ModelsView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            ToolbarItem {
-                Button(action: loadFromFolder) { Label("Load from Folder", systemImage: "folder") }
-                    .help("Load a model from a folder on this Mac")
+            if model.canLoadLocalFolders {
+                ToolbarItem {
+                    Button(action: loadFromFolder) { Label("Load from Folder", systemImage: "folder") }
+                        .help("Load a model from a folder on this Mac")
+                }
             }
             ToolbarItem {
                 Button { model.presentingDownload = true } label: { Label("Download", systemImage: "arrow.down.circle") }

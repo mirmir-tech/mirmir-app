@@ -77,13 +77,19 @@ extension RuntimeConnection {
 }
 
 extension GenerationRequest {
+    /// libmir's `IMAGE_PLACEHOLDER`.
+    static let imagePlaceholder = "<|mirmir_image|>"
+
     var wire: Mirmir_V1_GenerateRequest {
         var request = Mirmir_V1_GenerateRequest()
         request.model = model
-        request.messages = turns.map { turn in
+        // The engine places the image where its marker is and requires exactly
+        // one; like the TUI and web chat, it goes before the last user turn.
+        let imageTurn = image == nil ? nil : turns.lastIndex { $0.role == .user }
+        request.messages = turns.enumerated().map { index, turn in
             var message = Mirmir_V1_ChatMessageInput()
             message.role = turn.role.rawValue
-            message.content = turn.content
+            message.content = index == imageTurn ? "\(Self.imagePlaceholder)\n\(turn.content)" : turn.content
             if let reasoning = turn.reasoning, !reasoning.isEmpty { message.reasoningContent = reasoning }
             return message
         }

@@ -17,7 +17,11 @@ struct SettingsView: View {
                         Image(systemName: icon(folder.kind)).foregroundStyle(Palette.muted).frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(display(folder.path)).font(.mono(12)).lineLimit(1).truncationMode(.middle)
-                            Text(summary(folder.kind)).font(.system(size: 11)).foregroundStyle(.secondary)
+                            if let failure = model.modelFolders.failures[folder.id] {
+                                Text(describe(failure)).font(.system(size: 11)).foregroundStyle(Palette.danger)
+                            } else {
+                                Text(summary(folder.kind)).font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
                         }
                         Spacer()
                         Button("Remove", role: .destructive) { model.removeModelFolder(folder.id) }
@@ -64,7 +68,14 @@ struct SettingsView: View {
         if case .huggingFaceCache = kind { "shippingbox" } else { "folder" }
     }
 
-    private func summary(_ kind: ModelFolder.Kind) -> String {
+    private func describe(_ failure: FolderAccessFailure) -> String {
+        switch failure {
+        case .unresolvable: "Not found. Remove it, or add the folder again where it is now."
+        case .refused: "macOS refused access. Add the folder again to renew the grant."
+        }
+    }
+
+        private func summary(_ kind: ModelFolder.Kind) -> String {
         switch kind {
         case .huggingFaceCache: "Hugging Face cache: its models are listed in Models"
         case .folder: "Folder: load its models with Models → Load from Folder"

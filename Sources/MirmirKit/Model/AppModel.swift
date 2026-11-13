@@ -78,6 +78,14 @@ public final class AppModel {
 
     public var connection: RuntimeConnection? { phase.connection }
 
+    /// Whether results of a call on `connection` belong on screen: it is
+    /// the current instance's open connection. Calls outlive a switch to
+    /// another server or a reconnect, so every per-server write that follows
+    /// an `await` checks this first; two servers can list the same selector.
+    func isCurrent(_ connection: RuntimeConnection) -> Bool {
+        phase.connection === connection
+    }
+
     /// Starts connecting to the current instance and probing the others.
     public func start() {
         guard sessionTask == nil else { return }
@@ -159,14 +167,18 @@ public final class AppModel {
         activities = [:]
         inspections = [:]
         loads = [:]
+        transfers = [:]
     }
 
     /// Shows a failed call as a notice. A call the app cancelled itself is
     /// not a failure and is dropped.
-    func report(_ error: any Error, _ context: String? = nil) {
+    /// A failure on a server that is no longer current names that server.
+    func report(_ error: any Error, _ context: String? = nil, from connection: RuntimeConnection? = nil) {
         let error = ConnectionError.wrap(error)
         if case .cancelled = error { return }
-        notice = context.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
+        var message = context.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
+        if let connection, !isCurrent(connection) { message = "\(connection.address): \(message)" }
+        notice = message
     }
 
     private func persistInstances() {

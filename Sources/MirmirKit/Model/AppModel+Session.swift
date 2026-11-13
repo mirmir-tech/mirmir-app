@@ -61,7 +61,7 @@ extension AppModel {
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
                 try? await connection.watchActivity { activity in
-                    await self.apply(activity)
+                    await self.apply(activity, from: connection)
                 }
             }
             await pollLoop(connection, instance: instance)
@@ -87,6 +87,7 @@ extension AppModel {
 
     func refreshTelemetry(_ connection: RuntimeConnection, instance: InstanceRecord) async throws(ConnectionError) {
         let snapshot = try await connection.telemetry()
+        guard isCurrent(connection) else { return }
         telemetry = snapshot
         sparkline.append(snapshot.currentDecode ?? 0)
         if sparkline.count > 60 { sparkline.removeFirst(sparkline.count - 60) }
@@ -103,11 +104,11 @@ extension AppModel {
         // Thousands of samples cost the charts far more than they can show;
         // bucket them off the main actor and publish only real changes.
         let prepared = await Task.detached(priority: .utility) { raw.downsampled() }.value
+        guard isCurrent(connection) else { return }
         if prepared != history { history = prepared }
     }
 
     func refreshModels(_ connection: RuntimeConnection) async throws(ConnectionError) {
-        refreshModelsSoon = false
         let listed = try await connection.localModels()
         let active = try await connection.activeSelectors()
         // Matching resolves symlinks on disk: do it once per refresh, off the
@@ -115,12 +116,19 @@ extension AppModel {
         let serving = await Task.detached(priority: .utility) {
             Self.servingSelectors(models: listed, active: active)
         }.value
+        publishModels(listed, active: active, serving: serving, from: connection)
+    }
+
+    func publishModels(_ listed: [LocalModel], active: [String], serving: [String: String], from connection: RuntimeConnection) {
+        guard isCurrent(connection) else { return }
+        refreshModelsSoon = false
         if listed != models { models = listed }
         if active != activeSelectors { activeSelectors = active }
         if serving != servingSelectors { servingSelectors = serving }
     }
 
-    func apply(_ activity: Activity) {
+    func apply(_ activity: Activity, from connection: RuntimeConnection) {
+        guard isCurrent(connection) else { return }
         activities[activity.id] = activity
         if !activity.state.isActive {
             switch activity.kind {

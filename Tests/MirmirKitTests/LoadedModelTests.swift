@@ -15,7 +15,7 @@ struct LoadedModelTests {
         #expect(loaded.first { $0.selector == Self.path }?.displayName == "gemma-4-26b-a4b-it-8bit")
     }
 
-    @Test func primaryIsTheLastGeneratingModel() {
+    @Test func primaryIsTheLastGeneratingModel() throws {
         let model = AppModel.preview()
         model.activeSelectors.append(Self.path)
         let now = Date()
@@ -23,7 +23,7 @@ struct LoadedModelTests {
         model.apply(Activity(
             id: "g", kind: .generate, target: Self.path, state: .completed, stage: "completed", detail: "",
             startedAt: now, updatedAt: now, cancellable: false, progress: nil
-        ))
+        ), from: try #require(model.connection))
         #expect(model.primaryModel?.selector == Self.path)
     }
 
