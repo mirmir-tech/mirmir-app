@@ -54,12 +54,22 @@ sidebar or menu bar switches every screen.
 
 - **Personal** is the app's own server. Its socket resolves like `mirmir`'s
   `Paths::discover` (`$XDG_RUNTIME_DIR/mirmir`, else `$MIRMIR_STATE_HOME`,
-  `$XDG_STATE_HOME/mirmir`, `~/.local/state/mirmir`, then `mirmir.sock`), but
-  under the sandbox `HOME` is the container, so it is
-  `~/Library/Containers/tech.mirmir.app/Data/.local/state/mirmir/mirmir.sock`
-  (94 bytes, under the 104-byte limit). A CLI server's or the system server's
-  socket is outside the container and refused by the sandbox, so neither is
-  an instance kind; reach such a server as a remote one.
+  `$XDG_STATE_HOME/mirmir`, `~/.local/state/mirmir`, then `mirmir.sock`).
+  Under the sandbox `HOME` is the container, whose path grows with the
+  account name: with a 32-character name the container socket would be 111
+  bytes, past the 103 that Darwin's `sun_path` holds. The sandbox allows
+  binding a socket only inside the container, so `SocketPaths.runtimeLink`
+  keeps the runtime directory there (`.local/state/mirmir/run`) and reaches
+  it through a symlink in the app's per-user directory,
+  `confstr(_CS_DARWIN_USER_DIR)` =
+  `/var/folders/…/0/tech.mirmir.app/run`, whose length does not depend on
+  the account. The app passes that link to its server as `XDG_RUNTIME_DIR`,
+  so both name the socket `/var/folders/…/0/tech.mirmir.app/run/mirmir/mirmir.sock`
+  (about 90 bytes). It recreates the link before every connect and server
+  start. Outside the sandbox (debug runs) nothing changes. A CLI server's or
+  the system server's socket is outside the container and refused by the
+  sandbox, so neither is an instance kind; reach such a server as a remote
+  one.
 - **Remote** is a server's TLS listener at `host:port` (default 7443). Every
   call carries `authorization: Bearer mmk_…`; the key lives in the Keychain
   (`CredentialStore`), never in `instances.json`. The certificate is pinned by
@@ -94,6 +104,17 @@ when granted before it started. A granted Hugging Face cache (a folder with
 `models--*`, or its `hub`) is passed as `HF_HUB_CACHE`, mirmir's external hub
 cache; changing it restarts the server. Other folders load by path. A
 `mirmir` configuration key for model folders is a later step.
+
+Every unary call has a deadline by kind (`CallDeadlines`, `UnaryCall`):
+Health 5 s, monitoring (Telemetry, its history, active models) 10 s,
+discovery (local models, inspection, remote access status) 15 s, the
+Hugging Face search 30 s, and changes 60 s. A missed deadline is
+`ConnectionError.timedOut`, which counts as unreachable: a server that
+answers Health and then stops answering is dropped and reconnected instead of
+leaving the session on stale data, a probe of another instance or Add
+Server's test waiting forever. Server-streaming calls (Generate, Load, Pull,
+WatchActivity) have no deadline; they end with their stream or when
+cancelled.
 
 ## Local server lifecycle
 

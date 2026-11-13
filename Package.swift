@@ -45,9 +45,17 @@ let package = Package(
         // Mirmir.xcodeproj, as a real bundle with the embedded mirmir helper.
         // A runnable SwiftPM product would let Xcode launch a bare executable
         // without bundle or helper.
+        // The transport and protobuf products serve a stand-in `Runtime`
+        // service in the deadline tests.
         .testTarget(
             name: "MirmirKitTests",
-            dependencies: ["MirmirKit"]
+            dependencies: [
+                "MirmirKit",
+                "MirmirRPC",
+                .product(name: "GRPCCore", package: "grpc-swift-2"),
+                .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),
+                .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
+            ]
         ),
     ]
 )

@@ -51,7 +51,7 @@ extension AppModel {
             for _ in 0..<100 where supervisor.ownership.isRunning {
                 try? await Task.sleep(for: .milliseconds(100))
             }
-            supervisor.start(environment: modelFolders.serverEnvironment)
+            startServer()
             connectCurrent()
         }
     }

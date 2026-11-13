@@ -16,6 +16,9 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
     case keyRejected(address: String)
     /// The key's scope does not allow the call, or the call is local-only.
     case permissionDenied(message: String)
+    /// The server kept the connection open but did not answer a unary call
+    /// within its deadline.
+    case timedOut(address: String, after: Duration)
     /// The RPC failed with a gRPC status.
     case rpc(code: RPCError.Code, message: String)
     /// The app cancelled the call itself (instance switch, view gone, Stop).
@@ -38,6 +41,8 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
             "\(address) refused the API key. It may have been revoked; create a new one on the server."
         case .permissionDenied(let message):
             message
+        case .timedOut(let address, let after):
+            "\(address) did not answer within \(after.formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow)))."
         case .rpc(let code, let message):
             message.isEmpty ? "The server returned \(code)." : message
         case .cancelled:
@@ -48,7 +53,7 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
     /// Whether the server is gone rather than refusing one request.
     public var isUnreachable: Bool {
         switch self {
-        case .noServer, .unreachable: true
+        case .noServer, .unreachable, .timedOut: true
         case .rpc(let code, _): code == .unavailable
         case .updateNeeded, .missingKey, .certificateChanged, .keyRejected, .permissionDenied, .cancelled: false
         }

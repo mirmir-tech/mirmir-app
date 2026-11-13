@@ -12,7 +12,7 @@ extension RuntimeConnection {
     ) async throws(ConnectionError) {
         var request = Mirmir_V1_LoadModelRequest()
         request.selector = selector
-        try await call {
+        try await stream {
             try await runtime.loadModel(request) { response in
                 for try await event in response.messages {
                     await onProgress(LoadProgress(event))
@@ -27,7 +27,7 @@ extension RuntimeConnection {
     ) async throws(ConnectionError) {
         var request = Mirmir_V1_PullModelRequest()
         request.repoID = repoID
-        try await call {
+        try await stream {
             try await runtime.pullModel(request) { response in
                 for try await event in response.messages {
                     await onProgress(TransferProgress(event))
@@ -40,7 +40,7 @@ extension RuntimeConnection {
     public func watchActivity(onEvent: @escaping @Sendable (Activity) async -> Void) async throws(ConnectionError) {
         var request = Mirmir_V1_WatchActivityRequest()
         request.includeHistory = true
-        try await call {
+        try await stream {
             try await runtime.watchActivity(request) { response in
                 for try await event in response.messages {
                     await onEvent(Activity(event))
@@ -54,7 +54,7 @@ extension RuntimeConnection {
         onEvent: @escaping @Sendable (GenerationEvent) async -> Void
     ) async throws(ConnectionError) {
         let request = generation.wire
-        try await call {
+        try await stream {
             try await runtime.generate(request) { response in
                 for try await event in response.messages {
                     switch event.event {

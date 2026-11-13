@@ -42,6 +42,8 @@ public final class AppModel {
     /// Folders outside the container the user granted, for models.
     public let modelFolders: ModelFolders
     let paths: SocketPaths
+    /// Deadlines of the unary calls on every connection the model opens.
+    let deadlines: CallDeadlines
     let credentials: any CredentialStore
     let instanceFile = JSONFile<[InstanceRecord]>(name: "instances.json")
     var sessionTask: Task<Void, Never>?
@@ -57,10 +59,12 @@ public final class AppModel {
         paths: SocketPaths = SocketPaths(),
         supervisor: ServerSupervisor = ServerSupervisor(),
         credentials: any CredentialStore = Credentials.platformDefault,
-        modelFolders: ModelFolders = ModelFolders()
+        modelFolders: ModelFolders = ModelFolders(),
+        deadlines: CallDeadlines = .standard
     ) {
         self.modelFolders = modelFolders
         self.paths = paths
+        self.deadlines = deadlines
         self.credentials = credentials
         self.supervisor = supervisor
         self.chat = ChatController()
@@ -135,7 +139,7 @@ public final class AppModel {
     public func resumeServer() {
         serverPaused = false
         if currentInstance.isThisMac, connection == nil {
-            supervisor.start(environment: modelFolders.serverEnvironment)
+            startServer()
             connectCurrent()
         }
     }

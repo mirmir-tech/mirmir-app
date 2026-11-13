@@ -14,17 +14,25 @@ public final class RuntimeConnection: Sendable {
     /// The socket path, or `host:port` of a remote server.
     public let address: String
     public let health: ServerHealth
+    /// How long each kind of unary call waits for its reply.
+    public let deadlines: CallDeadlines
 
-    private init(grpc: GRPCClient<Transport>, connections: Task<Void, Never>, address: String, health: ServerHealth) {
+    private init(
+        grpc: GRPCClient<Transport>, connections: Task<Void, Never>, address: String, health: ServerHealth,
+        deadlines: CallDeadlines
+    ) {
         self.grpc = grpc
         self.runtime = Mirmir_V1_Runtime.Client(wrapping: grpc)
         self.connections = connections
         self.address = address
         self.health = health
+        self.deadlines = deadlines
     }
 
     /// Connects to a Unix socket and validates the protocol version.
-    public static func connect(socket: String) async throws(ConnectionError) -> RuntimeConnection {
+    public static func connect(
+        socket: String, deadlines: CallDeadlines = .standard
+    ) async throws(ConnectionError) -> RuntimeConnection {
         guard SocketPaths.isSocket(socket) else { throw .noServer(socket: socket) }
         do {
             let transport = try HTTP2ClientTransport.Posix(
@@ -33,7 +41,7 @@ public final class RuntimeConnection: Sendable {
                 target: .unixDomainSocket(path: socket, authority: "localhost"),
                 transportSecurity: .plaintext
             )
-            return try await open(transport, interceptors: [], address: socket)
+            return try await open(transport, interceptors: [], address: socket, deadlines: deadlines)
         } catch {
             throw ConnectionError.wrap(error)
         }
@@ -42,12 +50,16 @@ public final class RuntimeConnection: Sendable {
     /// Connects to a remote server's TLS listener with its API key. A pinned
     /// fingerprint accepts exactly that certificate; without one the
     /// certificate must chain to a system CA.
-    public static func connect(remote endpoint: RemoteEndpoint, key: String) async throws(ConnectionError) -> RuntimeConnection {
+    public static func connect(
+        remote endpoint: RemoteEndpoint, key: String, deadlines: CallDeadlines = .standard
+    ) async throws(ConnectionError) -> RuntimeConnection {
         let presented = PresentedCertificate()
         let security = endpoint.pinnedFingerprint.map { RemoteTLS.pinned($0, presented: presented) } ?? RemoteTLS.systemTrust
         do {
             let transport = try HTTP2ClientTransport.Posix(target: endpoint.target, transportSecurity: security)
-            return try await open(transport, interceptors: [BearerKey(key)], address: endpoint.address)
+            return try await open(
+                transport, interceptors: [BearerKey(key)], address: endpoint.address, deadlines: deadlines
+            )
         } catch {
             throw ConnectionError.remote(
                 error, address: endpoint.address, pinned: endpoint.pinnedFingerprint, presented: presented.fingerprint
@@ -67,20 +79,20 @@ public final class RuntimeConnection: Sendable {
     }
 
     private static func open(
-        _ transport: Transport, interceptors: [any ClientInterceptor], address: String
+        _ transport: Transport, interceptors: [any ClientInterceptor], address: String, deadlines: CallDeadlines
     ) async throws -> RuntimeConnection {
         let grpc = GRPCClient(transport: transport, interceptors: interceptors)
         let connections = Task<Void, Never> { _ = try? await grpc.runConnections() }
         let runtime = Mirmir_V1_Runtime.Client(wrapping: grpc)
         do {
-            var options = CallOptions.defaults
-            options.timeout = .seconds(5)
-            let reply = try await runtime.health(Mirmir_V1_HealthRequest(), options: options)
+            let reply = try await runtime.health(Mirmir_V1_HealthRequest(), options: deadlines.options(for: .health))
             let health = ServerHealth(protocolVersion: reply.protocolVersion, serverVersion: reply.serverVersion)
             if case .updateNeeded(let server) = ProtocolCompatibility(health: health) {
                 throw ConnectionError.updateNeeded(serverProtocol: server, serverVersion: health.serverVersion)
             }
-            return RuntimeConnection(grpc: grpc, connections: connections, address: address, health: health)
+            return RuntimeConnection(
+                grpc: grpc, connections: connections, address: address, health: health, deadlines: deadlines
+            )
         } catch {
             grpc.beginGracefulShutdown()
             connections.cancel()
@@ -105,7 +117,8 @@ public final class RuntimeConnection: Sendable {
             grpc: grpc,
             connections: Task {},
             address: "preview",
-            health: ServerHealth(protocolVersion: "2", serverVersion: "0.6.0")
+            health: ServerHealth(protocolVersion: "2", serverVersion: "0.6.0"),
+            deadlines: .standard
         )
     }
     #endif
@@ -115,10 +128,25 @@ public final class RuntimeConnection: Sendable {
         connections.cancel()
     }
 
-    /// Runs one unary call and converts failures to `ConnectionError`.
-    func call<T: Sendable>(_ body: () async throws -> T) async throws(ConnectionError) -> T {
+    /// Runs one unary call under its kind's deadline and converts failures
+    /// to `ConnectionError`; a missed deadline is `.timedOut`.
+    func call<T: Sendable>(
+        _ kind: UnaryCall, _ body: (CallOptions) async throws -> T
+    ) async throws(ConnectionError) -> T {
         do {
-            return try await body()
+            return try await body(deadlines.options(for: kind))
+        } catch let error as RPCError where error.code == .deadlineExceeded {
+            throw .timedOut(address: address, after: deadlines.timeout(for: kind))
+        } catch {
+            throw ConnectionError.wrap(error)
+        }
+    }
+
+    /// Runs one server-streaming call, which has no deadline: it lasts until
+    /// the stream ends or the calling task is cancelled.
+    func stream(_ body: () async throws -> Void) async throws(ConnectionError) {
+        do {
+            try await body()
         } catch {
             throw ConnectionError.wrap(error)
         }
@@ -129,65 +157,75 @@ public final class RuntimeConnection: Sendable {
 
 extension RuntimeConnection {
     public func ping() async throws(ConnectionError) -> ServerHealth {
-        try await call {
-            let reply = try await runtime.health(Mirmir_V1_HealthRequest())
+        try await call(.health) { options in
+            let reply = try await runtime.health(Mirmir_V1_HealthRequest(), options: options)
             return ServerHealth(protocolVersion: reply.protocolVersion, serverVersion: reply.serverVersion)
         }
     }
 
     public func localModels() async throws(ConnectionError) -> [LocalModel] {
-        try await call { try await runtime.listLocalModels(Mirmir_V1_ListLocalModelsRequest()).models.map(LocalModel.init) }
+        try await call(.discovery) { options in
+            try await runtime.listLocalModels(Mirmir_V1_ListLocalModelsRequest(), options: options).models.map(LocalModel.init)
+        }
     }
 
     public func activeSelectors() async throws(ConnectionError) -> [String] {
-        try await call { try await runtime.listActiveModels(Mirmir_V1_ListActiveModelsRequest()).selectors }
+        try await call(.monitoring) { options in
+            try await runtime.listActiveModels(Mirmir_V1_ListActiveModelsRequest(), options: options).selectors
+        }
     }
 
     public func telemetry() async throws(ConnectionError) -> TelemetrySnapshot {
-        try await call { TelemetrySnapshot(try await runtime.telemetry(Mirmir_V1_TelemetryRequest())) }
+        try await call(.monitoring) { options in
+            TelemetrySnapshot(try await runtime.telemetry(Mirmir_V1_TelemetryRequest(), options: options))
+        }
     }
 
     public func telemetryHistory(limit: Int) async throws(ConnectionError) -> TelemetryHistory {
         var request = Mirmir_V1_TelemetryHistoryRequest()
         request.limit = UInt32(clamping: limit)
-        return try await call { TelemetryHistory(try await runtime.telemetryHistory(request)) }
+        return try await call(.monitoring) { options in
+            TelemetryHistory(try await runtime.telemetryHistory(request, options: options))
+        }
     }
 
     public func inspect(selector: String) async throws(ConnectionError) -> ModelInspection {
         var request = Mirmir_V1_InspectModelRequest()
         request.selector = selector
-        return try await call { ModelInspection(try await runtime.inspectModel(request)) }
+        return try await call(.discovery) { options in ModelInspection(try await runtime.inspectModel(request, options: options)) }
     }
 
     public func updateSettings(selector: String, settings: GenerationSettings) async throws(ConnectionError) {
         var request = Mirmir_V1_UpdateModelGenerationRequest()
         request.selector = selector
         request.settings = settings.wire
-        _ = try await call { try await runtime.updateModelGeneration(request) }
+        _ = try await call(.management) { options in try await runtime.updateModelGeneration(request, options: options) }
     }
 
     public func unload(selector: String) async throws(ConnectionError) -> Bool {
         var request = Mirmir_V1_UnloadModelRequest()
         request.selector = selector
-        return try await call { try await runtime.unloadModel(request).unloaded }
+        return try await call(.management) { options in try await runtime.unloadModel(request, options: options).unloaded }
     }
 
     public func search(query: String, limit: Int = 30) async throws(ConnectionError) -> [CatalogModel] {
         var request = Mirmir_V1_SearchModelsRequest()
         request.query = query
         request.limit = UInt32(clamping: limit)
-        return try await call { try await runtime.searchModels(request).models.map(CatalogModel.init) }
+        return try await call(.catalog) { options in
+            try await runtime.searchModels(request, options: options).models.map(CatalogModel.init)
+        }
     }
 
     public func remove(repoID: String) async throws(ConnectionError) -> UInt64 {
         var request = Mirmir_V1_RemoveModelRequest()
         request.repoID = repoID
-        return try await call { try await runtime.removeModel(request).freedBytes }
+        return try await call(.management) { options in try await runtime.removeModel(request, options: options).freedBytes }
     }
 
     public func cancel(operationID: String) async throws(ConnectionError) -> Bool {
         var request = Mirmir_V1_CancelOperationRequest()
         request.operationID = operationID
-        return try await call { try await runtime.cancelOperation(request).accepted }
+        return try await call(.management) { options in try await runtime.cancelOperation(request, options: options).accepted }
     }
 }

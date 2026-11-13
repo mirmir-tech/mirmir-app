@@ -15,14 +15,16 @@ extension AppModel {
                 startedAt = nil
                 phase = .connected(connection)
                 summaries[instance.id] = InstanceSummary(status: .online(connection.health), telemetry: nil, loadedModels: [])
-                await runConnected(connection, instance: instance)
+                let lost = await runConnected(connection, instance: instance)
                 connection.close()
                 if Task.isCancelled { return }
-                phase = .offline(offlineError(for: instance))
+                let error = lost ?? offlineError(for: instance)
+                phase = .offline(error)
+                summaries[instance.id] = InstanceSummary(status: InstanceStatus(error: error), telemetry: nil, loadedModels: [])
             } catch {
                 if Task.isCancelled { return }
                 if shouldStartServer(for: instance, after: error, startedAt: startedAt) {
-                    supervisor.start(environment: modelFolders.serverEnvironment)
+                    startServer()
                     startedAt = Date()
                 }
                 if let startedAt, waitingForServer(since: startedAt) {
@@ -55,21 +57,23 @@ extension AppModel {
         supervisor.ownership.isRunning && Date().timeIntervalSince(start) < Self.serverStartTimeout
     }
 
-    /// Polls telemetry and models while watching activity. Returns when the
-    /// server becomes unreachable.
-    func runConnected(_ connection: RuntimeConnection, instance: InstanceRecord) async {
+    /// Polls telemetry and models while watching activity. Returns the
+    /// error when the server becomes unreachable or stops answering within
+    /// the monitoring deadlines, and nil when cancelled.
+    func runConnected(_ connection: RuntimeConnection, instance: InstanceRecord) async -> ConnectionError? {
         await withTaskGroup(of: Void.self) { group in
             group.addTask {
                 try? await connection.watchActivity { activity in
                     await self.apply(activity, from: connection)
                 }
             }
-            await pollLoop(connection, instance: instance)
+            let lost = await pollLoop(connection, instance: instance)
             group.cancelAll()
+            return lost
         }
     }
 
-    private func pollLoop(_ connection: RuntimeConnection, instance: InstanceRecord) async {
+    private func pollLoop(_ connection: RuntimeConnection, instance: InstanceRecord) async -> ConnectionError? {
         var tick = 0
         while !Task.isCancelled {
             do {
@@ -77,12 +81,15 @@ extension AppModel {
                 if tick % 2 == 0 { try await refreshHistory(connection) }
                 if tick % 5 == 0 || refreshModelsSoon { try await refreshModels(connection) }
             } catch {
-                if error.isUnreachable { return }
+                // A timeout counts as unreachable: a server that answers
+                // Health and then stalls is reconnected, not polled forever.
+                if error.isUnreachable { return error }
                 report(error)
             }
             tick += 1
             try? await Task.sleep(for: .seconds(1))
         }
+        return nil
     }
 
     func refreshTelemetry(_ connection: RuntimeConnection, instance: InstanceRecord) async throws(ConnectionError) {
