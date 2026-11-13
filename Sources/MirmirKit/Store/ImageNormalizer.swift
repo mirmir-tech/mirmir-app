@@ -5,9 +5,22 @@ import ImageIO
 
 public enum ImageNormalizationError: Error, LocalizedError, Equatable {
     case unreadable
+    /// Larger than the server accepts (`MessageLimits.imageBytes`), and it
+    /// could not be made smaller.
+    case tooLarge(bytes: Int)
 
     public var errorDescription: String? {
-        "The image could not be read. Attach a PNG, JPEG, GIF, WebP or HEIC image."
+        switch self {
+        case .unreadable:
+            "The image could not be read. Attach a PNG, JPEG, GIF, WebP or HEIC image."
+        case .tooLarge(let bytes):
+            "The image is \(Self.megabytes(bytes)) and could not be made smaller; images up to "
+                + "\(Self.megabytes(MessageLimits.imageBytes)) can be attached."
+        }
+    }
+
+    private static func megabytes(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .binary)
     }
 }
 
@@ -16,17 +29,46 @@ public enum ImageNormalizationError: Error, LocalizedError, Equatable {
 /// upright ones pass through unchanged, and a tagged one (a phone's rotated
 /// or mirrored JPEG) is re-encoded with its pixels turned upright. Anything
 /// else ImageIO reads, such as an iPhone's HEIC photo or a TIFF, is
-/// re-encoded as JPEG the same way. Decoding a large photo is slow: call it off the main
-/// actor.
+/// re-encoded as JPEG the same way. So is an image larger than the server
+/// accepts (`MessageLimits.imageBytes`): it is re-encoded, at lower quality
+/// and then fewer pixels until it fits. Vision encoders resize far below
+/// those sizes, so the model sees no difference; refusing would only make
+/// the user shrink the image by hand. Without ImageIO (Linux) such an image
+/// is refused. Decoding a large photo is slow: call it off the main actor.
 public enum ImageNormalizer {
     /// The longest side of a converted image; vision encoders resize far
     /// below it, and a 48-megapixel photo would only cost memory.
     static let maxPixelSize = 4096
 
+    /// JPEG encodings tried in order until one fits `MessageLimits.imageBytes`:
+    /// the first is the usual conversion, the later ones only shrink an
+    /// image that would not fit.
+    static let encodings: [(maxPixelSize: Int, quality: Double)] = [
+        (maxPixelSize, 0.9), (maxPixelSize, 0.75), (2048, 0.85), (1024, 0.85),
+    ]
+
     public static func normalized(_ data: Data) throws(ImageNormalizationError) -> Data {
+        let fits = data.count <= MessageLimits.imageBytes
         #if canImport(ImageIO)
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw .unreadable }
-        if isServerFormat(data), isUpright(source) { return data }
+        if fits, isServerFormat(data), isUpright(source) { return data }
+        for encoding in encodings {
+            let jpeg = try self.jpeg(source, maxPixelSize: encoding.maxPixelSize, quality: encoding.quality)
+            if jpeg.count <= MessageLimits.imageBytes { return jpeg }
+        }
+        throw .tooLarge(bytes: data.count)
+        #else
+        guard isServerFormat(data) else { throw .unreadable }
+        guard fits else { throw .tooLarge(bytes: data.count) }
+        return data
+        #endif
+    }
+
+    #if canImport(ImageIO)
+    /// The image upright as JPEG, its longest side at most `maxPixelSize`.
+    private static func jpeg(
+        _ source: CGImageSource, maxPixelSize: Int, quality: Double
+    ) throws(ImageNormalizationError) -> Data {
         // A thumbnail at full size applies the photo's EXIF orientation to
         // the pixels: the server's decoder ignores the orientation tag.
         let options: [CFString: Any] = [
@@ -40,16 +82,12 @@ public enum ImageNormalizer {
         guard let destination = CGImageDestinationCreateWithData(output, "public.jpeg" as CFString, 1, nil) else {
             throw .unreadable
         }
-        CGImageDestinationAddImage(destination, try opaque(image), [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
+        let properties = [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+        CGImageDestinationAddImage(destination, try opaque(image), properties)
         guard CGImageDestinationFinalize(destination) else { throw .unreadable }
         return output as Data
-        #else
-        if isServerFormat(data) { return data }
-        throw .unreadable
-        #endif
     }
 
-    #if canImport(ImageIO)
     /// Whether the stored pixels are already the way the image is shown: no
     /// EXIF orientation, or the identity one.
     static func isUpright(_ source: CGImageSource) -> Bool {

@@ -146,8 +146,10 @@ public final class AppModel {
         }
     }
 
-    /// Call from `applicationWillTerminate`.
+    /// Call from `applicationWillTerminate`. The streaming reply is saved
+    /// as stopped, and every chat save is on disk, before anything closes.
     public func shutdown() {
+        chat.terminate()
         sessionTask?.cancel()
         probeTask?.cancel()
         connection?.close()

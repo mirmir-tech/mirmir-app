@@ -35,11 +35,11 @@ public final class RuntimeConnection: Sendable {
     ) async throws(ConnectionError) -> RuntimeConnection {
         guard SocketPaths.isSocket(socket) else { throw .noServer(socket: socket) }
         do {
-            let transport = try HTTP2ClientTransport.Posix(
+            let transport = try Self.transport(
                 // The default authority is the socket path, which is not a
                 // valid HTTP/2 `:authority`; tonic rejects such requests.
                 target: .unixDomainSocket(path: socket, authority: "localhost"),
-                transportSecurity: .plaintext
+                security: .plaintext
             )
             return try await open(transport, interceptors: [], address: socket, deadlines: deadlines)
         } catch {
@@ -56,7 +56,7 @@ public final class RuntimeConnection: Sendable {
         let presented = PresentedCertificate()
         let security = endpoint.pinnedFingerprint.map { RemoteTLS.pinned($0, presented: presented) } ?? RemoteTLS.systemTrust
         do {
-            let transport = try HTTP2ClientTransport.Posix(target: endpoint.target, transportSecurity: security)
+            let transport = try Self.transport(target: endpoint.target, security: security)
             return try await open(
                 transport, interceptors: [BearerKey(key)], address: endpoint.address, deadlines: deadlines
             )
@@ -76,6 +76,14 @@ public final class RuntimeConnection: Sendable {
             if let error = error as? ConnectionError { throw error }
             throw .unreachable(address: endpoint.address, detail: ConnectionError.describe(error))
         }
+    }
+
+    /// The transport to a local or remote server; both carry messages up to
+    /// `MessageLimits.messageBytes`.
+    static func transport(
+        target: some ResolvableTarget, security: Transport.TransportSecurity
+    ) throws -> Transport {
+        try Transport(target: target, transportSecurity: security, serviceConfig: MessageLimits.serviceConfig)
     }
 
     private static func open(

@@ -25,8 +25,8 @@ public final class ChatController {
     /// Serial, so saves land in order; encoding every chat stays off the
     /// main actor.
     let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)
-    private var generation: Task<Void, Never>?
-    private var operationID: String?
+    /// The reply streaming now, with the conversation that owns it.
+    private var active: ActiveGeneration?
     /// Streaming publishes at most this often; every write re-renders the
     /// thread and the conversation list.
     private static let streamInterval: Duration = .milliseconds(50)
@@ -59,7 +59,10 @@ public final class ChatController {
         selectedID = visibleConversations.first?.id
     }
 
-    public var isGenerating: Bool { generation != nil }
+    public var isGenerating: Bool { active != nil }
+
+    /// The conversation whose reply is streaming, if any.
+    public var generatingConversation: UUID? { active?.conversation }
 
     @discardableResult
     public func newConversation(model selector: String? = nil) -> UUID {
@@ -72,8 +75,10 @@ public final class ChatController {
         return conversation.id
     }
 
+    /// Deletes a conversation; a reply it is still generating is stopped
+    /// first, wherever the selection is. Other conversations' replies go on.
     public func delete(_ id: UUID) {
-        if id == selectedID { stop() }
+        if active?.conversation == id { stop() }
         if let conversation = conversations.first(where: { $0.id == id }) {
             conversation.storedImages.forEach { sessionImages[$0] = nil }
             if let attachments = savingStore?.attachments { conversation.storedImages.forEach(attachments.remove) }
@@ -97,7 +102,7 @@ public final class ChatController {
     @discardableResult
     public func send(_ text: String, image: Data? = nil, to conversation: UUID? = nil) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, generation == nil, let connection = model?.connection else { return false }
+        guard !text.isEmpty, active == nil, let connection = model?.connection else { return false }
         let id = conversation ?? selected?.id ?? newConversation()
         if conversations.first(where: { $0.id == id })?.model.isEmpty == true, let loaded = model?.primaryModel {
             let selector = model?.servingSelector(for: loaded) ?? loaded.selector
@@ -109,6 +114,10 @@ public final class ChatController {
         }
         var attached: MessageImage?
         if let image {
+            guard image.count <= MessageLimits.imageBytes else {
+                model?.notice = ImageNormalizationError.tooLarge(bytes: image.count).localizedDescription
+                return false
+            }
             do {
                 attached = .stored(try keep(image))
             } catch {
@@ -139,36 +148,58 @@ public final class ChatController {
             if conversation.messages.isEmpty { conversation.title = String(text.prefix(60)) }
             conversation.messages += [user, reply]
         }
-        let stream = ReplyAccumulator()
-        generation = Task {
+        // Runs its main-actor parts only after `active` is set below.
+        let task = Task {
             do {
                 try await connection.generate(request) { event in
-                    await self.receive(event, into: stream, conversation: id, reply: reply.id)
+                    await self.receive(event, reply: reply.id)
                 }
-                finish(id, reply.id, stream: stream, state: nil)
+                finish(reply.id, state: nil)
             } catch {
                 let cancelled = Task.isCancelled || ConnectionError.wrap(error) == .cancelled
-                let state: ReplyState = cancelled ? .stopped : .failed(message: error.localizedDescription)
-                finish(id, reply.id, stream: stream, state: state)
+                finish(reply.id, state: cancelled ? .stopped : .failed(message: error.localizedDescription))
             }
         }
+        active = ActiveGeneration(
+            conversation: id, reply: reply.id, stream: ReplyAccumulator(), task: task, connection: connection
+        )
         return true
     }
 
-    /// Cancels the RPC and asks the server to cancel the operation, which
-    /// frees the session even if the disconnect is observed late.
+    /// Ends the streaming reply now, keeping what streamed as stopped (as
+    /// completed if its completion already arrived). Cancels the RPC and asks
+    /// the server that runs it to cancel the operation, which frees the
+    /// session even if the disconnect is observed late. Events and the
+    /// finish that arrive afterwards belong to no active reply and are
+    /// dropped.
     public func stop() {
-        guard let generation else { return }
-        generation.cancel()
-        if let operationID, let connection = model?.connection {
+        guard let current = active else { return }
+        active = nil
+        lastStreamWrite = nil
+        current.task.cancel()
+        if let operationID = current.operationID {
+            let connection = current.connection
             Task { _ = try? await connection.cancel(operationID: operationID) }
         }
+        let state = current.stream.stats.map(ReplyState.completed) ?? .stopped
+        write(current.stream, state: state, conversation: current.conversation, reply: current.reply)
+        persist()
     }
 
-    private func receive(_ event: GenerationEvent, into stream: ReplyAccumulator, conversation: UUID, reply: UUID) {
+    /// Call when the app terminates, before the connection closes: stops the
+    /// streaming reply as Stop does and returns once every save queued so
+    /// far, that one included, is on disk.
+    public func terminate() {
+        stop()
+        flushSaves()
+    }
+
+    private func receive(_ event: GenerationEvent, reply: UUID) {
+        guard let current = active, current.reply == reply else { return }
+        let stream = current.stream
         switch event {
         case .started(let id):
-            operationID = id
+            active?.operationID = id
             return
         case .token(let text, let reasoning):
             stream.append(text, reasoning: reasoning)
@@ -178,15 +209,18 @@ public final class ChatController {
         case .completed(let text, let reasoning, let stats):
             stream.complete(text: text, reasoning: reasoning, stats: stats)
         }
-        write(stream, state: stream.stats.map(ReplyState.completed) ?? .streaming, conversation: conversation, reply: reply)
+        let state = stream.stats.map(ReplyState.completed) ?? .streaming
+        write(stream, state: state, conversation: current.conversation, reply: reply)
     }
 
-    private func finish(_ conversation: UUID, _ reply: UUID, stream: ReplyAccumulator, state: ReplyState?) {
-        let final = state ?? stream.stats.map(ReplyState.completed) ?? .stopped
-        write(stream, state: final, conversation: conversation, reply: reply)
-        generation = nil
-        operationID = nil
+    /// Records how the RPC ended, unless the reply was already ended by
+    /// `stop` (or a newer one replaced it).
+    private func finish(_ reply: UUID, state: ReplyState?) {
+        guard let current = active, current.reply == reply else { return }
+        active = nil
         lastStreamWrite = nil
+        let final = state ?? current.stream.stats.map(ReplyState.completed) ?? .stopped
+        write(current.stream, state: final, conversation: current.conversation, reply: reply)
         persist()
     }
 
