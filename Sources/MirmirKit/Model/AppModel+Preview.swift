@@ -23,10 +23,10 @@ extension AppModel {
             paths: SocketPaths(environment: ["MIRMIR_STATE_HOME": scratch.path], home: scratch.path),
             supervisor: supervisor,
             credentials: MemoryCredentials(),
-            modelFolders: ModelFolders(file: JSONFile(name: "model-folders.json", directory: scratch))
+            modelFolders: ModelFolders(file: JSONFile(name: "model-folders.json", directory: scratch)),
+            chats: nil
         )
         model.isPreview = true
-        model.chat.persists = false
         model.fillPreview(scenario)
         return model
     }

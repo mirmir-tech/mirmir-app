@@ -87,12 +87,18 @@ public struct SocketPaths: Sendable {
         try files.createSymbolicLink(atPath: link.alias, withDestinationPath: link.target)
     }
 
+    /// The per-user directory under `/var/folders`; nil off Darwin, where
+    /// there is no app sandbox and so no runtime link.
     public static func systemDarwinUserDirectory() -> String? {
+        #if canImport(Darwin)
         let length = confstr(_CS_DARWIN_USER_DIR, nil, 0)
         guard length > 0 else { return nil }
         var buffer = [CChar](repeating: 0, count: length)
         guard confstr(_CS_DARWIN_USER_DIR, &buffer, length) == length else { return nil }
         return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        #else
+        return nil
+        #endif
     }
 
     public var personalSocket: String {

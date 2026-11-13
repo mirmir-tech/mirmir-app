@@ -14,8 +14,19 @@ public struct JSONFile<Value: Codable>: Sendable {
     }
 
     public func load() -> Value? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = try? read() else { return nil }
         return try? JSONDecoder.mirmir.decode(Value.self, from: data)
+    }
+
+    /// The file's bytes, or nil when there is no file. A file that exists
+    /// but cannot be read throws, so callers can tell it from absence.
+    public func read() throws -> Data? {
+        do {
+            return try Data(contentsOf: url)
+        } catch {
+            if !FileManager.default.fileExists(atPath: url.path) { return nil }
+            throw error
+        }
     }
 
     public func save(_ value: Value) throws {

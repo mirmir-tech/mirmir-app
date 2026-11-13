@@ -60,14 +60,16 @@ public final class AppModel {
         supervisor: ServerSupervisor = ServerSupervisor(),
         credentials: any CredentialStore = Credentials.platformDefault,
         modelFolders: ModelFolders = ModelFolders(),
-        deadlines: CallDeadlines = .standard
+        deadlines: CallDeadlines = .standard,
+        // Nil keeps chats in memory only (previews).
+        chats: ChatStore? = ChatStore()
     ) {
         self.modelFolders = modelFolders
         self.paths = paths
         self.deadlines = deadlines
         self.credentials = credentials
         self.supervisor = supervisor
-        self.chat = ChatController()
+        self.chat = ChatController(store: chats)
         var stored = instanceFile.load() ?? []
         stored.removeAll { $0.isThisMac }
         instances = [.thisMac] + stored

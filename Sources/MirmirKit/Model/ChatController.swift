@@ -11,25 +11,34 @@ public final class ChatController {
     public var maxTokens: UInt64?
 
     weak var model: AppModel?
-    private let file = JSONFile<[Conversation]>(name: "chats.json")
+    /// Where chats and their images are kept; nil for previews, whose
+    /// sample chats stay in memory.
+    let store: ChatStore?
+    /// Why the saved chats did not load as written; shown above the list.
+    public internal(set) var loadIssue: ChatLoadIssue?
+    /// Stored images a request needed but could not read, shown as
+    /// unavailable on their messages. Read again on every send.
+    public internal(set) var unreadableImages: Set<UUID> = []
+    /// Images of a session whose chats are not saved: previews, and a
+    /// session that must leave an unreadable `chats.json` untouched.
+    @ObservationIgnored var sessionImages: [UUID: Data] = [:]
     /// Serial, so saves land in order; encoding every chat stays off the
     /// main actor.
-    private let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)
+    let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)
     private var generation: Task<Void, Never>?
     private var operationID: String?
     /// Streaming publishes at most this often; every write re-renders the
     /// thread and the conversation list.
     private static let streamInterval: Duration = .milliseconds(50)
     private var lastStreamWrite: ContinuousClock.Instant?
-    /// Off for previews, so sample chats never reach `chats.json`.
-    var persists = true
-    /// Images attached to messages, sent again with every later turn.
-    var attachments = AttachmentStore()
     /// What each conversation's composer holds until it is sent.
     public internal(set) var drafts: [UUID: ComposerDraft] = [:]
 
-    init() {
-        conversations = (file.load() ?? []).map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
+    init(store: ChatStore?) {
+        let history = store?.load() ?? ChatHistory()
+        self.store = store
+        loadIssue = history.issue
+        conversations = history.conversations.map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
         selectedID = conversations.first?.id
     }
 
@@ -65,8 +74,9 @@ public final class ChatController {
 
     public func delete(_ id: UUID) {
         if id == selectedID { stop() }
-        if persists, let conversation = conversations.first(where: { $0.id == id }) {
-            conversation.storedImages.forEach(attachments.remove)
+        if let conversation = conversations.first(where: { $0.id == id }) {
+            conversation.storedImages.forEach { sessionImages[$0] = nil }
+            if let attachments = savingStore?.attachments { conversation.storedImages.forEach(attachments.remove) }
         }
         drafts[id] = nil
         conversations.removeAll { $0.id == id }
@@ -78,11 +88,12 @@ public final class ChatController {
         update(id) { $0.model = selector }
     }
 
-    /// Sends a message. `image` must already be normalized for the server
+    /// Sends a message to `conversation`, else the selected one or a new
+    /// one; returns whether it was sent. `image` must already be normalized
     /// (`ImageNormalizer`); it is kept with the message, so later turns and
-    /// a reopened chat still send it.
-    /// Sends to `conversation`, else the selected one or a new one. Returns
-    /// whether the message was sent.
+    /// a reopened chat still send it. When the conversation's newest image
+    /// cannot be read nothing is sent: the notice says so, the draft stays,
+    /// and attaching the image again (or starting a new chat) continues.
     @discardableResult
     public func send(_ text: String, image: Data? = nil, to conversation: UUID? = nil) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,23 +110,34 @@ public final class ChatController {
         var attached: MessageImage?
         if let image {
             do {
-                attached = .stored(persists ? try attachments.save(image) : UUID())
+                attached = .stored(try keep(image))
             } catch {
                 model?.notice = "Could not keep the image: \(error.localizedDescription)"
                 return false
             }
         }
+        let user = ChatMessage(body: .user(text: text, image: attached))
         let reply = ChatMessage(body: .assistant(text: "", reasoning: "", thinkingSeconds: nil, state: .streaming))
+        var pending = conversation
+        pending.messages += [user, reply]
+        let request: GenerationRequest
+        var read: UUID?
+        do {
+            request = try pending.request(replyingTo: reply.id, maxTokens: maxTokens, temperature: temperature) { stored in
+                read = stored
+                // The new image is in memory; earlier ones come from disk.
+                if case .stored(stored) = attached, let image { return image }
+                return try imageData(stored)
+            }
+        } catch {
+            if case .imageUnavailable(let id, _) = error { unreadableImages.insert(id) }
+            model?.notice = error.localizedDescription
+            return false
+        }
+        if let read { unreadableImages.remove(read) }
         update(id) { conversation in
             if conversation.messages.isEmpty { conversation.title = String(text.prefix(60)) }
-            conversation.messages.append(ChatMessage(body: .user(text: text, image: attached)))
-            conversation.messages.append(reply)
-        }
-        guard let updated = conversations.first(where: { $0.id == id }) else { return false }
-        let attachments = attachments
-        let request = updated.request(replyingTo: reply.id, maxTokens: maxTokens, temperature: temperature) { stored in
-            // The new image is in memory; earlier ones come from disk.
-            if case .stored(stored) = attached, let image { image } else { attachments.load(stored) }
+            conversation.messages += [user, reply]
         }
         let stream = ReplyAccumulator()
         generation = Task {
@@ -182,54 +204,5 @@ public final class ChatController {
         change(&conversations[index])
         conversations[index].updatedAt = Date()
         if persisting { persist() }
-    }
-
-    private func persist() {
-        guard persists else { return }
-        let snapshot = conversations
-        let file = file
-        saver.async { try? file.save(snapshot) }
-    }
-
-    /// A reply still streaming when the app quit is stored as stopped.
-    private static func settled(_ conversation: Conversation) -> Conversation {
-        var conversation = conversation
-        for index in conversation.messages.indices {
-            if case .assistant(let text, let reasoning, let seconds, .streaming) = conversation.messages[index].body {
-                conversation.messages[index].body = .assistant(text: text, reasoning: reasoning, thinkingSeconds: seconds, state: .stopped)
-            }
-        }
-        return conversation
-    }
-}
-
-/// Collects streamed fragments and measures how long the model reasoned.
-@MainActor
-final class ReplyAccumulator {
-    private(set) var text = ""
-    private(set) var reasoning = ""
-    private(set) var stats: GenerationStats?
-    private var reasoningStarted: Date?
-    private(set) var thinkingSeconds: Double?
-
-    func append(_ fragment: String, reasoning isReasoning: Bool) {
-        if isReasoning {
-            if reasoningStarted == nil { reasoningStarted = Date() }
-            reasoning += fragment
-        } else {
-            if let started = reasoningStarted, thinkingSeconds == nil {
-                thinkingSeconds = Date().timeIntervalSince(started)
-            }
-            text += fragment
-        }
-    }
-
-    func complete(text: String, reasoning: String, stats: GenerationStats) {
-        if !text.isEmpty { self.text = text }
-        if !reasoning.isEmpty { self.reasoning = reasoning }
-        if let started = reasoningStarted, thinkingSeconds == nil {
-            thinkingSeconds = Date().timeIntervalSince(started)
-        }
-        self.stats = stats
     }
 }

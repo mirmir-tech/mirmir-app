@@ -32,7 +32,7 @@ public final class LogTail: @unchecked Sendable {
     func writer() throws -> FileHandle {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: url.path) {
-            FileManager.default.createFile(atPath: url.path, contents: nil)
+            _ = FileManager.default.createFile(atPath: url.path, contents: nil)
         }
         let handle = try FileHandle(forWritingTo: url)
         try handle.seekToEnd()

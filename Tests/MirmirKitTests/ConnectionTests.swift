@@ -75,7 +75,7 @@ struct RemoteTests {
     // AppModel stores instances under Application Support, which
     // swift-corelibs-foundation does not provide.
     @Test @MainActor func remoteWithoutKeyNeedsOne() async {
-        let model = AppModel(credentials: MemoryCredentials())
+        let model = AppModel(credentials: MemoryCredentials(), chats: nil)
         let record = InstanceRecord(name: "Lab", target: .remote(RemoteEndpoint(host: "lab")))
         await #expect(throws: ConnectionError.missingKey(address: "lab:7443")) {
             _ = try await model.open(record)

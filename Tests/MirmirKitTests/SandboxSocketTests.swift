@@ -12,6 +12,8 @@ struct SandboxSocketTests {
             .appendingPathComponent("mm-\(UUID().uuidString.prefix(8))", isDirectory: true)
         let home = scratch.appendingPathComponent("Users/\(Self.account)/Library/Containers/tech.mirmir.app/Data").path
         // The sandbox's per-app user directory: `/var/folders/…/0/<bundle id>/`.
+        // Off Darwin the temporary directory stands in: the link logic is
+        // the same, only the sandbox is not there.
         let system = SocketPaths.systemDarwinUserDirectory() ?? NSTemporaryDirectory()
         let userDirectory = (system as NSString).appendingPathComponent("tech.mirmir.test-\(UUID().uuidString.prefix(8))")
         defer {
@@ -74,22 +76,38 @@ struct SandboxSocketTests {
     }
 }
 
-/// A real AF_UNIX listener, bound the way mirmir binds its socket.
+#if canImport(Darwin)
+import Darwin
+
+private let streamSocket = SOCK_STREAM
+private let bindSocket = Darwin.bind
+#elseif canImport(Glibc)
+import Glibc
+
+private let streamSocket = Int32(SOCK_STREAM.rawValue)
+private let bindSocket = Glibc.bind
+#endif
+
+/// A real AF_UNIX listener, bound the way mirmir binds its socket. Its
+/// path limit is the platform's `sun_path`: 104 bytes on Darwin, 108 on
+/// Linux.
 enum UnixSocket {
     static func bind(_ path: String) throws -> Int32 {
         var address = sockaddr_un()
         let bytes = path.utf8CString
         guard bytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { throw POSIXError(.ENAMETOOLONG) }
         address.sun_family = sa_family_t(AF_UNIX)
+        #if canImport(Darwin)
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+        #endif
         withUnsafeMutableBytes(of: &address.sun_path) { raw in
             bytes.withUnsafeBytes { raw.copyMemory(from: $0) }
         }
-        let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        let descriptor = socket(AF_UNIX, streamSocket, 0)
         guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                Darwin.bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+                bindSocket(descriptor, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
         guard bound == 0, listen(descriptor, 1) == 0 else {

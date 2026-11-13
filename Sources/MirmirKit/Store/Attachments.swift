@@ -26,8 +26,10 @@ public struct AttachmentStore: Sendable {
         return id
     }
 
-    public func load(_ id: UUID) -> Data? {
-        try? Data(contentsOf: url(id))
+    /// The image's bytes. A missing or unreadable file throws: a request
+    /// must never quietly go without the image the conversation shows.
+    public func load(_ id: UUID) throws -> Data {
+        try Data(contentsOf: url(id))
     }
 
     public func remove(_ id: UUID) {

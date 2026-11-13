@@ -47,6 +47,10 @@ struct ConversationList: View {
             .padding(.horizontal, 16)
             .frame(height: 44)
             Divider()
+            if let issue = chat.loadIssue {
+                ChatLoadIssueBanner(issue: issue) { model.chat.dismissLoadIssue() }
+                Divider()
+            }
             List(selection: $chat.selectedID) {
                 ForEach(chat.visibleConversations) { conversation in
                     VStack(alignment: .leading, spacing: 2) {
@@ -67,6 +71,32 @@ struct ConversationList: View {
             .listStyle(.inset)
             .scrollContentBackground(.hidden)
         }
+    }
+}
+
+/// Saved chats that did not load as written: where the original went, or
+/// that this session is not saved.
+struct ChatLoadIssueBanner: View {
+    let issue: ChatLoadIssue
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label {
+                Text(issue.message).foregroundStyle(Palette.ink)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.warning)
+            }
+                .font(.system(size: 11))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            if !issue.isPersistent {
+                Button("Dismiss", action: dismiss).controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -32,7 +32,7 @@ struct ChatImageTests {
             ChatMessage(body: .user(text: "Describe this image", image: .stored(id))), reply(),
             ChatMessage(body: .user(text: "What color is it?", image: nil)), next,
         ])
-        let request = conversation.request(replyingTo: next.id, maxTokens: nil, temperature: nil, image: attachments.load)
+        let request = try conversation.request(replyingTo: next.id, maxTokens: nil, temperature: nil, image: attachments.load)
         #expect(request.image == TurnImage(data: Data([7, 7, 7]), turn: 0))
         #expect(request.wire.messages.map(\.content).first == "<|mirmir_image|>\nDescribe this image")
         #expect(request.wire.messages.last?.content == "What color is it?")
@@ -48,7 +48,7 @@ struct ChatImageTests {
         ])
         let loaded = try JSONDecoder.mirmir.decode(Conversation.self, from: JSONEncoder.mirmir.encode(saved))
         #expect(loaded.messages.map(\.body) == saved.messages.map(\.body))
-        let request = loaded.request(replyingTo: next.id, maxTokens: nil, temperature: nil, image: attachments.load)
+        let request = try loaded.request(replyingTo: next.id, maxTokens: nil, temperature: nil, image: attachments.load)
         #expect(request.image == TurnImage(data: Data([1, 2]), turn: 0))
     }
 
@@ -61,7 +61,7 @@ struct ChatImageTests {
             ChatMessage(body: .user(text: "One again", image: nil)), reply(),
             ChatMessage(body: .user(text: "Two", image: .stored(second))), next,
         ])
-        let request = conversation.request(replyingTo: next.id, maxTokens: nil, temperature: nil, image: attachments.load)
+        let request = try conversation.request(replyingTo: next.id, maxTokens: nil, temperature: nil, image: attachments.load)
         // The failed reply sends no turn, so "Two" is turn 3.
         #expect(request.turns.map(\.content) == ["One", "One again", "A red square.", "Two"])
         #expect(request.image == TurnImage(data: Data([2]), turn: 3))

@@ -43,6 +43,9 @@ struct ModelFolderTests {
         #expect(ModelFolders(file: file).folders.isEmpty)
     }
 
+    // Following a move and reporting a missing folder are what Darwin's
+    // bookmarks do; swift-corelibs-foundation's bookmarks are plain paths.
+    #if canImport(Darwin)
     @Test func aMovedCacheIsFollowedAndAMissingOneIsReported() throws {
         let root = try scratch(), store = try scratch()
         defer { try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: store) }
@@ -69,6 +72,7 @@ struct ModelFolderTests {
         // The move is persisted for the next launch.
         #expect(ModelFolders(file: file).folders.first { $0.id == cache.id }.map { real($0.path) } == real(moved.path))
     }
+    #endif
 
         @Test func onlyTheBundledServerIsUsed() {
         #expect(ServerBinary.resolve(bundle: Bundle(for: BundleMarker.self)) == nil)

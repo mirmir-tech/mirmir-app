@@ -58,7 +58,8 @@ struct DeadlineTests {
             supervisor: ServerSupervisor(logFile: directory.appendingPathComponent("server.log")),
             credentials: MemoryCredentials(),
             modelFolders: ModelFolders(file: JSONFile(name: "model-folders.json", directory: directory)),
-            deadlines: Self.short
+            deadlines: Self.short,
+            chats: ChatStore(directory: directory)
         )
         model.serverPaused = true
 

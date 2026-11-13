@@ -33,6 +33,7 @@ struct ThreadView: View {
 }
 
 struct MessageView: View {
+    @Environment(AppModel.self) private var model
     let message: ChatMessage
 
     var body: some View {
@@ -42,6 +43,8 @@ struct MessageView: View {
                 Spacer(minLength: 120)
                 VStack(alignment: .trailing, spacing: 4) {
                     switch image {
+                    case .stored(let id) where model.chat.unreadableImages.contains(id):
+                        Label("Image unavailable", systemImage: "photo.badge.exclamationmark").font(.system(size: 11)).opacity(0.85)
                     case .stored: Label("Image attached", systemImage: "photo").font(.system(size: 11)).opacity(0.85)
                     case .unavailable: Label("Image not kept", systemImage: "photo.badge.exclamationmark").font(.system(size: 11)).opacity(0.85)
                     case nil: EmptyView()
