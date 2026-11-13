@@ -114,6 +114,59 @@ struct ChatImageTests {
         #expect(rgb[0] > 240 && rgb[1] > 240 && rgb[2] > 240)
     }
 
+    /// A phone's JPEG is stored sideways or mirrored with an EXIF tag the
+    /// server's decoder ignores: its pixels must arrive upright. The fixture
+    /// is red on its left half and blue on its right.
+    @Test(arguments: [
+        // EXIF orientation, shown size, and the colors shown at the top-left
+        // and bottom-right.
+        (UInt32(6), 32, 64, "red", "blue"),  // rotated 90° clockwise
+        (UInt32(8), 32, 64, "blue", "red"),  // rotated 90° counterclockwise
+        (UInt32(3), 64, 32, "blue", "red"),  // rotated 180°
+        (UInt32(2), 64, 32, "blue", "red"),  // mirrored
+        (UInt32(1), 64, 32, "red", "blue"),  // upright
+    ])
+    func taggedJPEGsArriveUpright(orientation: UInt32, width: Int, height: Int, topLeft: String, bottomRight: String) throws {
+        let jpeg = try Self.halves(orientation: orientation)
+        let converted = try ImageNormalizer.normalized(jpeg)
+        if orientation == 1 { #expect(converted == jpeg) }
+        // Raw pixels, ignoring any tag, as libmir's decoder reads them.
+        let source = try #require(CGImageSourceCreateWithData(converted as CFData, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect((image.width, image.height) == (width, height))
+        #expect(try Self.color(of: image, x: 4, y: 4) == topLeft)
+        #expect(try Self.color(of: image, x: width - 5, y: height - 5) == bottomRight)
+    }
+
+    private static func halves(orientation: UInt32) throws -> Data {
+        let context = try #require(CGContext(
+            data: nil, width: 64, height: 32, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+        context.setFillColor(red: 0, green: 0, blue: 1, alpha: 1)
+        context.fill(CGRect(x: 32, y: 0, width: 32, height: 32))
+        let output = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(output, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try #require(context.makeImage()), [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        return output as Data
+    }
+
+    /// "red" or "blue" at a point measured from the top-left of the stored
+    /// pixels.
+    private static func color(of image: CGImage, x: Int, y: Int) throws -> String {
+        let context = try #require(CGContext(
+            data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: image.width * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        let pixels = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        let offset = (y * image.width + x) * 4
+        return pixels[offset] > pixels[offset + 2] ? "red" : "blue"
+    }
+
     /// A real HEIC file, as an iPhone writes, encoded by ImageIO.
     static func heicFixture(width: Int, height: Int) throws -> Data {
         let context = try #require(CGContext(

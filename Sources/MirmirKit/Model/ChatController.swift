@@ -25,6 +25,8 @@ public final class ChatController {
     var persists = true
     /// Images attached to messages, sent again with every later turn.
     var attachments = AttachmentStore()
+    /// What each conversation's composer holds until it is sent.
+    public internal(set) var drafts: [UUID: ComposerDraft] = [:]
 
     init() {
         conversations = (file.load() ?? []).map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
@@ -66,6 +68,7 @@ public final class ChatController {
         if persists, let conversation = conversations.first(where: { $0.id == id }) {
             conversation.storedImages.forEach(attachments.remove)
         }
+        drafts[id] = nil
         conversations.removeAll { $0.id == id }
         if selectedID == id { selectedID = visibleConversations.first?.id }
         persist()
@@ -78,17 +81,20 @@ public final class ChatController {
     /// Sends a message. `image` must already be normalized for the server
     /// (`ImageNormalizer`); it is kept with the message, so later turns and
     /// a reopened chat still send it.
-    public func send(_ text: String, image: Data? = nil) {
+    /// Sends to `conversation`, else the selected one or a new one. Returns
+    /// whether the message was sent.
+    @discardableResult
+    public func send(_ text: String, image: Data? = nil, to conversation: UUID? = nil) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, generation == nil, let connection = model?.connection else { return }
-        let id = selected?.id ?? newConversation()
+        guard !text.isEmpty, generation == nil, let connection = model?.connection else { return false }
+        let id = conversation ?? selected?.id ?? newConversation()
         if conversations.first(where: { $0.id == id })?.model.isEmpty == true, let loaded = model?.primaryModel {
             let selector = model?.servingSelector(for: loaded) ?? loaded.selector
             update(id) { $0.model = selector }
         }
         guard let conversation = conversations.first(where: { $0.id == id }), !conversation.model.isEmpty else {
             model?.notice = "Choose a loaded model before sending."
-            return
+            return false
         }
         var attached: MessageImage?
         if let image {
@@ -96,7 +102,7 @@ public final class ChatController {
                 attached = .stored(persists ? try attachments.save(image) : UUID())
             } catch {
                 model?.notice = "Could not keep the image: \(error.localizedDescription)"
-                return
+                return false
             }
         }
         let reply = ChatMessage(body: .assistant(text: "", reasoning: "", thinkingSeconds: nil, state: .streaming))
@@ -105,7 +111,7 @@ public final class ChatController {
             conversation.messages.append(ChatMessage(body: .user(text: text, image: attached)))
             conversation.messages.append(reply)
         }
-        guard let updated = conversations.first(where: { $0.id == id }) else { return }
+        guard let updated = conversations.first(where: { $0.id == id }) else { return false }
         let attachments = attachments
         let request = updated.request(replyingTo: reply.id, maxTokens: maxTokens, temperature: temperature) { stored in
             // The new image is in memory; earlier ones come from disk.
@@ -124,6 +130,7 @@ public final class ChatController {
                 finish(id, reply.id, stream: stream, state: state)
             }
         }
+        return true
     }
 
     /// Cancels the RPC and asks the server to cancel the operation, which

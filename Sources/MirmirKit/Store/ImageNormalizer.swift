@@ -12,9 +12,11 @@ public enum ImageNormalizationError: Error, LocalizedError, Equatable {
 }
 
 /// Converts an attachment to bytes the server's image decoder accepts. libmir
-/// decodes PNG, JPEG, GIF and WebP; those pass through unchanged. Anything
+/// decodes PNG, JPEG, GIF and WebP, but ignores their EXIF orientation:
+/// upright ones pass through unchanged, and a tagged one (a phone's rotated
+/// or mirrored JPEG) is re-encoded with its pixels turned upright. Anything
 /// else ImageIO reads, such as an iPhone's HEIC photo or a TIFF, is
-/// re-encoded as JPEG. Decoding a large photo is slow: call it off the main
+/// re-encoded as JPEG the same way. Decoding a large photo is slow: call it off the main
 /// actor.
 public enum ImageNormalizer {
     /// The longest side of a converted image; vision encoders resize far
@@ -22,8 +24,9 @@ public enum ImageNormalizer {
     static let maxPixelSize = 4096
 
     public static func normalized(_ data: Data) throws(ImageNormalizationError) -> Data {
-        if isServerFormat(data) { return data }
         #if canImport(ImageIO)
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw .unreadable }
+        if isServerFormat(data), isUpright(source) { return data }
         // A thumbnail at full size applies the photo's EXIF orientation to
         // the pixels: the server's decoder ignores the orientation tag.
         let options: [CFString: Any] = [
@@ -32,9 +35,7 @@ public enum ImageNormalizer {
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
             kCGImageSourceShouldCacheImmediately: false,
         ]
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-        else { throw .unreadable }
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { throw .unreadable }
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(output, "public.jpeg" as CFString, 1, nil) else {
             throw .unreadable
@@ -43,11 +44,20 @@ public enum ImageNormalizer {
         guard CGImageDestinationFinalize(destination) else { throw .unreadable }
         return output as Data
         #else
+        if isServerFormat(data) { return data }
         throw .unreadable
         #endif
     }
 
     #if canImport(ImageIO)
+    /// Whether the stored pixels are already the way the image is shown: no
+    /// EXIF orientation, or the identity one.
+    static func isUpright(_ source: CGImageSource) -> Bool {
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let orientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.uint32Value ?? 1
+        return orientation == CGImagePropertyOrientation.up.rawValue
+    }
+
     /// JPEG has no alpha: transparent pixels would turn black, so the image
     /// is laid on white, as Preview shows it.
     private static func opaque(_ image: CGImage) throws(ImageNormalizationError) -> CGImage {

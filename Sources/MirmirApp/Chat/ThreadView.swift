@@ -25,7 +25,9 @@ struct ThreadView: View {
                     if let last = conversation.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
-            Composer(conversation: conversation)
+            // Keyed by conversation, so no view state outlives a switch; the
+            // draft itself lives in the chat controller per conversation.
+            Composer(conversation: conversation).id(conversation.id)
         }
     }
 }
@@ -122,22 +124,26 @@ struct AssistantMessage: View {
 struct Composer: View {
     @Environment(AppModel.self) private var model
     let conversation: Conversation
-    @State private var draft = ""
-    @State private var image: Data?
-    @State private var preparingImage = false
+
+    private var draft: ComposerDraft { model.chat.draft(for: conversation.id) }
+
+    private var text: Binding<String> {
+        let chat = model.chat, id = conversation.id
+        return Binding { chat.draft(for: id).text } set: { chat.setDraftText($0, for: id) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField(placeholder, text: $draft, axis: .vertical)
+            TextField(placeholder, text: text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(2...10)
                 .padding(EdgeInsets(top: 11, leading: 14, bottom: 4, trailing: 14))
                 .onSubmit(send)
             HStack(spacing: 6) {
-                if preparingImage {
+                if draft.isPreparingImage {
                     ProgressView().controlSize(.small)
                 } else {
-                    Button(action: attach) { Image(systemName: image == nil ? "paperclip" : "photo.fill") }
+                    Button(action: attach) { Image(systemName: draft.image == nil ? "paperclip" : "photo.fill") }
                         .buttonStyle(.borderless)
                         .disabled(!(model.model(selector: conversation.model)?.imageInput ?? false))
                         .help("Attach an image for vision models. It stays with the conversation; a new one replaces it.")
@@ -153,7 +159,7 @@ struct Composer: View {
                 } else {
                     Button(action: send) { Image(systemName: "arrow.up") }
                         .buttonStyle(.borderedProminent).clipShape(Circle())
-                        .disabled(preparingImage || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(draft.isPreparingImage || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return, modifiers: .command)
                         .accessibilityLabel("Send")
                 }
@@ -172,10 +178,8 @@ struct Composer: View {
     }
 
     private func send() {
-        guard !model.chat.isGenerating, !preparingImage else { return }
-        model.chat.send(draft, image: image)
-        draft = ""
-        image = nil
+        guard !model.chat.isGenerating else { return }
+        model.chat.sendDraft(of: conversation.id)
     }
 
     private func attach() {
@@ -183,19 +187,10 @@ struct Composer: View {
         panel.allowedContentTypes = [.png, .jpeg, .gif, .webP, .heic, .tiff]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        preparingImage = true
-        Task {
-            // HEIC and TIFF become JPEG for the server's decoder; decoding a
-            // photo takes a while, so it runs off the main actor.
-            let prepared = await Task.detached(priority: .userInitiated) { () -> Result<Data, any Error> in
-                Result { try ImageNormalizer.normalized(try Data(contentsOf: url)) }
-            }.value
-            preparingImage = false
-            switch prepared {
-            case .success(let data): image = data
-            case .failure(let error): model.notice = "\(url.lastPathComponent): \(error.localizedDescription)"
-            }
-        }
+        // HEIC and TIFF become JPEG and tagged photos are turned upright,
+        // off the main actor; the result stays with this conversation.
+        let chat = model.chat, id = conversation.id
+        Task { await chat.attachImage(to: id) { try Data(contentsOf: url) } }
     }
 }
 
