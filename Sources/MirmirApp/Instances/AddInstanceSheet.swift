@@ -79,7 +79,7 @@ struct AddInstanceSheet: View {
                 Toggle("Trust this certificate", isOn: $trusted)
             }
         }
-        Text("Create a key on the server with `mirmir remote key create --name \(defaultName) --scope use`, or `--scope control` to manage models. The key is stored in your Keychain.")
+        Text("Create a key on the server with `mirmir remote key create --name <this Mac> --scope use`, or `--scope control` to manage models. The key is stored in your Keychain.")
             .font(.system(size: 11)).foregroundStyle(.secondary)
     }
 

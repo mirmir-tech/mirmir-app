@@ -8,7 +8,7 @@ struct ChatView: View {
         HStack(spacing: 0) {
             ConversationList()
                 .frame(width: 270)
-                .background(Palette.canvas)
+                .background(Palette.list)
             Divider()
             Group {
                 if let conversation = model.chat.selected {
@@ -17,10 +17,11 @@ struct ChatView: View {
                     EmptyState(title: "No conversation", message: "Start a new chat with ⌘N.", symbol: "bubble.left.and.bubble.right")
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Palette.surface)
         }
         .navigationTitle(model.chat.selected?.title ?? "Chat")
+        .navigationSubtitle(model.currentInstance.name)
         .toolbar {
             if let conversation = model.chat.selected {
                 ToolbarItem { ChatModelMenu(conversation: conversation) }
@@ -47,7 +48,7 @@ struct ConversationList: View {
             .frame(height: 44)
             Divider()
             List(selection: $chat.selectedID) {
-                ForEach(chat.conversations) { conversation in
+                ForEach(chat.visibleConversations) { conversation in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
                             Text(conversation.title).fontWeight(.medium).lineLimit(1)
@@ -119,3 +120,12 @@ struct GenerationOptionsMenu: View {
         Binding { model.chat.maxTokens } set: { model.chat.maxTokens = $0 }
     }
 }
+
+#if DEBUG
+#Preview("Chat", traits: .fixedLayout(width: 1070, height: 800)) {
+    ChatView().previewModel()
+}
+#Preview("Chat — streaming", traits: .fixedLayout(width: 1070, height: 800)) {
+    ChatView().previewModel(.preview(.generating))
+}
+#endif

@@ -9,6 +9,8 @@ enum Palette {
     /// Window chrome: sidebar and toolbar, from the artboards.
     static let sidebar = dynamic(0xECF0F5, 0x161C25)
     static let toolbar = dynamic(0xF7F8FA, 0x141920)
+    /// The middle column of three-column screens (Chat's conversations).
+    static let list = dynamic(0xF7F8FA, 0x141920)
     /// Menu bar panel and the card inside it.
     static let panel = dynamic(0xF6F8FB, 0x1E252F)
     static let panelCard = dynamic(0xFFFFFF, 0x232C38)

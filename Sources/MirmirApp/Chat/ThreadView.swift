@@ -176,3 +176,12 @@ struct Composer: View {
         if panel.runModal() == .OK, let url = panel.url { image = try? Data(contentsOf: url) }
     }
 }
+
+#if DEBUG
+#Preview("Thread", traits: .fixedLayout(width: 720, height: 700)) {
+    let model = AppModel.preview()
+    if let conversation = model.chat.conversations.first {
+        ThreadView(conversation: conversation).previewModel(model)
+    }
+}
+#endif

@@ -93,3 +93,30 @@ struct NoticeBanner: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Window — Overview", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview().showing(.overview))
+}
+#Preview("Window — Overview, dark", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview().showing(.overview)).preferredColorScheme(.dark)
+}
+#Preview("Window — Models", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview().showing(.models))
+}
+#Preview("Window — Chat", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview(.generating).showing(.chat))
+}
+#Preview("Window — Instances", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview().showing(.instances))
+}
+#Preview("Window — Sessions", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview().showing(.sessions))
+}
+#Preview("Window — Logs", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview().showing(.logs))
+}
+#Preview("Window — offline", traits: .fixedLayout(width: 1280, height: 800)) {
+    RootView().previewModel(AppModel.preview(.offline).showing(.overview))
+}
+#endif

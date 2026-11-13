@@ -25,7 +25,8 @@ struct InstanceDetail: View {
                         ForEach(summary.loadedModels, id: \.self) { selector in
                             HStack(spacing: 8) {
                                 StatusDot(color: Palette.signal, size: 6)
-                                Text(selector).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                                Text(Conversation.modelName(selector)).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                                    .help(selector)
                             }
                         }
                     }
@@ -121,3 +122,13 @@ struct RemoteAccessEntry: View {
         .background(Palette.raised, in: RoundedRectangle(cornerRadius: 8))
     }
 }
+
+#if DEBUG
+#Preview("Instance — This Mac", traits: .fixedLayout(width: 340, height: 700)) {
+    InstanceDetail(record: .thisMac).previewModel()
+}
+#Preview("Instance — needs update", traits: .fixedLayout(width: 340, height: 700)) {
+    let model = AppModel.preview()
+    InstanceDetail(record: model.instances[2]).previewModel(model)
+}
+#endif

@@ -68,7 +68,7 @@ struct InstanceCard: View {
             }
             Grid(alignment: .leading, horizontalSpacing: 12) {
                 GridRow {
-                    stat("Loaded model", summary.loadedModels.first.map { $0.split(separator: "/").last.map(String.init) ?? $0 } ?? "—")
+                    stat("Loaded model", summary.loadedModels.first.map(Conversation.modelName) ?? "—")
                     stat("Decode", summary.telemetry.map { "\(Format.rate($0.decode)) t/s" } ?? "—")
                     stat("Sessions", summary.telemetry.map { "\($0.activeRequests)" } ?? "—")
                 }
@@ -121,3 +121,9 @@ extension InstanceStatus {
         if case .offline = self { true } else { false }
     }
 }
+
+#if DEBUG
+#Preview("Instances", traits: .fixedLayout(width: 1070, height: 800)) {
+    NavigationStack { InstancesView() }.previewModel()
+}
+#endif

@@ -62,7 +62,7 @@ public final class RuntimeConnection: Sendable {
             return try await RemoteTLS.presentedFingerprint(host: endpoint.host, port: endpoint.port)
         } catch {
             if let error = error as? ConnectionError { throw error }
-            throw .unreachable(address: endpoint.address, detail: error.localizedDescription)
+            throw .unreachable(address: endpoint.address, detail: ConnectionError.describe(error))
         }
     }
 
@@ -87,6 +87,28 @@ public final class RuntimeConnection: Sendable {
             throw error
         }
     }
+
+    #if DEBUG
+    /// A connection for SwiftUI previews: it never dials a server and every
+    /// call on it fails at once, so previews only render the data they were
+    /// given.
+    public static func preview() -> RuntimeConnection {
+        let transport = try! HTTP2ClientTransport.Posix(
+            target: .unixDomainSocket(path: "/nonexistent/mirmir-preview.sock", authority: "localhost"),
+            transportSecurity: .plaintext
+        )
+        // Closed before it ever runs: calls fail instead of waiting for a
+        // connection that never comes.
+        let grpc = GRPCClient(transport: transport)
+        grpc.beginGracefulShutdown()
+        return RuntimeConnection(
+            grpc: grpc,
+            connections: Task {},
+            address: "preview",
+            health: ServerHealth(protocolVersion: "2", serverVersion: "0.6.0")
+        )
+    }
+    #endif
 
     public func close() {
         grpc.beginGracefulShutdown()

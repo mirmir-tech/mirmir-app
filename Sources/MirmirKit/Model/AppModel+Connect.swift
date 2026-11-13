@@ -3,7 +3,9 @@ import Foundation
 extension AppModel {
     /// Opens a connection to a saved instance: its Unix socket, or a remote
     /// server's TLS listener with the key from the credential store.
-    func open(_ record: InstanceRecord) async throws(ConnectionError) -> RuntimeConnection {
+    /// Nonisolated: the Keychain lookup and socket checks run off the main
+    /// actor.
+    nonisolated func open(_ record: InstanceRecord) async throws(ConnectionError) -> RuntimeConnection {
         if case .remote(let endpoint) = record.target {
             guard let key = credentials.key(for: record.id) else { throw .missingKey(address: endpoint.address) }
             return try await RuntimeConnection.connect(remote: endpoint, key: key)
@@ -16,14 +18,15 @@ extension AppModel {
 
     /// Where a connection to the instance goes: the socket path or
     /// `grpcs://host:port`, for display.
-    public func address(of record: InstanceRecord) -> String {
+    public nonisolated func address(of record: InstanceRecord) -> String {
         if case .remote(let endpoint) = record.target { return "grpcs://\(endpoint.address)" }
         let socket = paths.socket(for: record.target) ?? ""
-        return socket.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        // The home the socket was resolved against, not the process's.
+        return socket.hasPrefix(paths.home + "/") ? "~" + socket.dropFirst(paths.home.count) : socket
     }
 
     /// The error shown when an open connection to the instance closes.
-    func offlineError(for record: InstanceRecord) -> ConnectionError {
+    nonisolated func offlineError(for record: InstanceRecord) -> ConnectionError {
         if case .remote(let endpoint) = record.target {
             return .unreachable(address: endpoint.address, detail: "the connection closed")
         }

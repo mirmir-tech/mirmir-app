@@ -9,10 +9,13 @@ public final class AppModel {
     // Navigation shared by the window, menu bar and keyboard shortcuts.
     public var section: SidebarSection = .overview
     public var range: TimeRange = .hour
+    /// The Hugging Face download sheet on the Models screen, opened from the
+    /// screen's toolbar or the menu bar panel.
+    public var presentingDownload = false
 
     // Instances.
-    public private(set) var instances: [InstanceRecord]
-    public private(set) var currentInstanceID: UUID
+    public internal(set) var instances: [InstanceRecord]
+    public internal(set) var currentInstanceID: UUID
     public internal(set) var summaries: [UUID: InstanceSummary] = [:]
 
     // Connection and live data for the current instance.
@@ -22,6 +25,9 @@ public final class AppModel {
     public internal(set) var sparkline: [Double] = []
     public internal(set) var models: [LocalModel] = []
     public internal(set) var activeSelectors: [String] = []
+    /// Listed selector → the active selector serving it, resolved off the
+    /// main actor in `refreshModels`.
+    public internal(set) var servingSelectors: [String: String] = [:]
     public internal(set) var activities: [String: Activity] = [:]
     public internal(set) var inspections: [String: ModelInspection] = [:]
     public internal(set) var loads: [String: LoadProgress] = [:]
@@ -40,6 +46,10 @@ public final class AppModel {
     var probeTask: Task<Void, Never>?
     var refreshModelsSoon = false
     var lastStartError: String?
+    var lastActivityPrune = Date.distantPast
+    /// Previews: sample data that never reaches `instances.json`, and no
+    /// notices from calls the inert preview connection rejects.
+    var isPreview = false
 
     public init(
         paths: SocketPaths = SocketPaths(),
@@ -58,6 +68,7 @@ public final class AppModel {
         instances = [.thisMac] + stored
         currentInstanceID = InstanceRecord.thisMacID
         chat.model = self
+        chat.instanceChanged()
     }
 
     public var currentInstance: InstanceRecord {
@@ -76,6 +87,7 @@ public final class AppModel {
     public func select(instance id: UUID) {
         guard id != currentInstanceID, instances.contains(where: { $0.id == id }) else { return }
         currentInstanceID = id
+        chat.instanceChanged()
         connectCurrent()
     }
 
@@ -142,12 +154,22 @@ public final class AppModel {
         sparkline = []
         models = []
         activeSelectors = []
+        servingSelectors = [:]
         activities = [:]
         inspections = [:]
         loads = [:]
     }
 
+    /// Shows a failed call as a notice. A call the app cancelled itself is
+    /// not a failure and is dropped.
+    func report(_ error: any Error, _ context: String? = nil) {
+        let error = ConnectionError.wrap(error)
+        if case .cancelled = error { return }
+        notice = context.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
+    }
+
     private func persistInstances() {
+        guard !isPreview else { return }
         do {
             try instanceFile.save(instances.filter { !$0.isThisMac })
         } catch {

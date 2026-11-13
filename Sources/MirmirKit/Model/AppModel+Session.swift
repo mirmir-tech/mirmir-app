@@ -32,7 +32,7 @@ extension AppModel {
                         lastStartError = error.localizedDescription
                         supervisor.logs.note("connect failed: \(error.localizedDescription)")
                     }
-                    phase = .startingServer
+                    if case .startingServer = phase {} else { phase = .startingServer }
                     try? await Task.sleep(for: .milliseconds(300))
                     continue
                 }
@@ -78,7 +78,7 @@ extension AppModel {
                 if tick % 5 == 0 || refreshModelsSoon { try await refreshModels(connection) }
             } catch {
                 if error.isUnreachable { return }
-                notice = error.localizedDescription
+                report(error)
             }
             tick += 1
             try? await Task.sleep(for: .seconds(1))
@@ -99,13 +99,25 @@ extension AppModel {
         let interval = history.samplingInterval
         let wanted = Int((range.duration / max(interval, 0.001)).rounded(.up))
         let limit = history.retentionLimit > 0 ? min(wanted, history.retentionLimit) : wanted
-        history = try await connection.telemetryHistory(limit: max(limit, 1))
+        let raw = try await connection.telemetryHistory(limit: max(limit, 1))
+        // Thousands of samples cost the charts far more than they can show;
+        // bucket them off the main actor and publish only real changes.
+        let prepared = await Task.detached(priority: .utility) { raw.downsampled() }.value
+        if prepared != history { history = prepared }
     }
 
     func refreshModels(_ connection: RuntimeConnection) async throws(ConnectionError) {
         refreshModelsSoon = false
-        models = try await connection.localModels()
-        activeSelectors = try await connection.activeSelectors()
+        let listed = try await connection.localModels()
+        let active = try await connection.activeSelectors()
+        // Matching resolves symlinks on disk: do it once per refresh, off the
+        // main actor, instead of in every table row and sort comparison.
+        let serving = await Task.detached(priority: .utility) {
+            Self.servingSelectors(models: listed, active: active)
+        }.value
+        if listed != models { models = listed }
+        if active != activeSelectors { activeSelectors = active }
+        if serving != servingSelectors { servingSelectors = serving }
     }
 
     func apply(_ activity: Activity) {
@@ -116,7 +128,12 @@ extension AppModel {
             default: break
             }
         }
-        let cutoff = Date().addingTimeInterval(-3600)
+        // `includeHistory` replays a burst of events on connect; pruning the
+        // whole dictionary for each of them is wasted work on the main actor.
+        let now = Date()
+        guard now.timeIntervalSince(lastActivityPrune) > 5 else { return }
+        lastActivityPrune = now
+        let cutoff = now.addingTimeInterval(-3600)
         activities = activities.filter { $0.value.state.isActive || $0.value.updatedAt > cutoff }
     }
 

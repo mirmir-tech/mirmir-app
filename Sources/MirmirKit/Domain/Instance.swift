@@ -67,7 +67,9 @@ public enum InstanceKind: Sendable {
 
     public var label: String {
         switch self {
-        case .personal: "Personal"
+        // mirmir calls it the personal instance; to the user it is the
+        // server on this Mac, as opposed to a remote one.
+        case .personal: "Local"
         case .system: "System"
         case .socket: "Socket"
         case .remote: "Remote"

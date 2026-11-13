@@ -5,23 +5,45 @@ import Observation
 @MainActor
 @Observable
 public final class ChatController {
-    public private(set) var conversations: [Conversation]
+    public internal(set) var conversations: [Conversation]
     public var selectedID: UUID?
     public var temperature: Float?
     public var maxTokens: UInt64?
 
     weak var model: AppModel?
     private let file = JSONFile<[Conversation]>(name: "chats.json")
+    /// Serial, so saves land in order; encoding every chat stays off the
+    /// main actor.
+    private let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)
     private var generation: Task<Void, Never>?
     private var operationID: String?
+    /// Streaming publishes at most this often; every write re-renders the
+    /// thread and the conversation list.
+    private static let streamInterval: Duration = .milliseconds(50)
+    private var lastStreamWrite: ContinuousClock.Instant?
+    /// Off for previews, so sample chats never reach `chats.json`.
+    var persists = true
 
     init() {
         conversations = (file.load() ?? []).map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
         selectedID = conversations.first?.id
     }
 
+    /// The current server's conversations; the others stay saved for when
+    /// that server is current again.
+    public var visibleConversations: [Conversation] {
+        guard let instance = model?.currentInstanceID else { return [] }
+        return conversations.filter { $0.instanceID == instance }
+    }
+
     public var selected: Conversation? {
-        conversations.first { $0.id == selectedID }
+        visibleConversations.first { $0.id == selectedID }
+    }
+
+    /// Called when the current server changes: select its latest chat.
+    func instanceChanged() {
+        stop()
+        selectedID = visibleConversations.first?.id
     }
 
     public var isGenerating: Bool { generation != nil }
@@ -29,7 +51,8 @@ public final class ChatController {
     @discardableResult
     public func newConversation(model selector: String? = nil) -> UUID {
         let selector = selector ?? model?.primaryModel.map { model?.servingSelector(for: $0) ?? $0.selector } ?? ""
-        let conversation = Conversation(model: selector)
+        guard let instance = model?.currentInstanceID else { return UUID() }
+        let conversation = Conversation(instanceID: instance, model: selector)
         conversations.insert(conversation, at: 0)
         selectedID = conversation.id
         persist()
@@ -39,7 +62,7 @@ public final class ChatController {
     public func delete(_ id: UUID) {
         if id == selectedID { stop() }
         conversations.removeAll { $0.id == id }
-        if selectedID == id { selectedID = conversations.first?.id }
+        if selectedID == id { selectedID = visibleConversations.first?.id }
         persist()
     }
 
@@ -50,7 +73,7 @@ public final class ChatController {
     public func send(_ text: String, image: Data? = nil) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, generation == nil, let connection = model?.connection else { return }
-        let id = selectedID ?? newConversation()
+        let id = selected?.id ?? newConversation()
         if conversations.first(where: { $0.id == id })?.model.isEmpty == true, let loaded = model?.primaryModel {
             let selector = model?.servingSelector(for: loaded) ?? loaded.selector
             update(id) { $0.model = selector }
@@ -77,7 +100,8 @@ public final class ChatController {
                 }
                 finish(id, reply.id, stream: stream, state: nil)
             } catch {
-                let state: ReplyState = Task.isCancelled ? .stopped : .failed(message: error.localizedDescription)
+                let cancelled = Task.isCancelled || ConnectionError.wrap(error) == .cancelled
+                let state: ReplyState = cancelled ? .stopped : .failed(message: error.localizedDescription)
                 finish(id, reply.id, stream: stream, state: state)
             }
         }
@@ -97,8 +121,12 @@ public final class ChatController {
         switch event {
         case .started(let id):
             operationID = id
+            return
         case .token(let text, let reasoning):
             stream.append(text, reasoning: reasoning)
+            let now = ContinuousClock.now
+            if let last = lastStreamWrite, now - last < Self.streamInterval { return }
+            lastStreamWrite = now
         case .completed(let text, let reasoning, let stats):
             stream.complete(text: text, reasoning: reasoning, stats: stats)
         }
@@ -110,6 +138,7 @@ public final class ChatController {
         write(stream, state: final, conversation: conversation, reply: reply)
         generation = nil
         operationID = nil
+        lastStreamWrite = nil
         persist()
     }
 
@@ -130,7 +159,10 @@ public final class ChatController {
     }
 
     private func persist() {
-        try? file.save(conversations)
+        guard persists else { return }
+        let snapshot = conversations
+        let file = file
+        saver.async { try? file.save(snapshot) }
     }
 
     /// A reply still streaming when the app quit is stored as stopped.

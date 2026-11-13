@@ -18,6 +18,9 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
     case permissionDenied(message: String)
     /// The RPC failed with a gRPC status.
     case rpc(code: RPCError.Code, message: String)
+    /// The app cancelled the call itself (instance switch, view gone, Stop).
+    /// Never a failure to report.
+    case cancelled
 
     public var errorDescription: String? {
         switch self {
@@ -37,6 +40,8 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
             message
         case .rpc(let code, let message):
             message.isEmpty ? "The server returned \(code)." : message
+        case .cancelled:
+            "Cancelled."
         }
     }
 
@@ -45,17 +50,25 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
         switch self {
         case .noServer, .unreachable: true
         case .rpc(let code, _): code == .unavailable
-        case .updateNeeded, .missingKey, .certificateChanged, .keyRejected, .permissionDenied: false
+        case .updateNeeded, .missingKey, .certificateChanged, .keyRejected, .permissionDenied, .cancelled: false
         }
     }
 
     static func wrap(_ error: any Error) -> ConnectionError {
         if let error = error as? ConnectionError { return error }
+        if error is CancellationError { return .cancelled }
         if let error = error as? RPCError {
+            // grpc-swift wraps a cancelled task as an unexpected transport error.
+            if error.code == .cancelled || error.cause is CancellationError { return .cancelled }
             if error.code == .permissionDenied { return .permissionDenied(message: error.message) }
+            // grpc-swift reports transport failures as "The transport threw an
+            // unexpected error." and keeps the reason only in `cause`.
+            if let cause = error.cause {
+                return .rpc(code: error.code, message: "\(error.message) \(describe(cause))")
+            }
             return .rpc(code: error.code, message: error.message)
         }
-        return .rpc(code: .unknown, message: error.localizedDescription)
+        return .rpc(code: .unknown, message: describe(error))
     }
 
     /// Classifies a failed call to a remote server, naming certificate and key

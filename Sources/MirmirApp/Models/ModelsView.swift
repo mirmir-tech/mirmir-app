@@ -12,7 +12,20 @@ struct ModelsView: View {
     @State private var query = ""
     @State private var filter: ModelFilter = .all
     @State private var showInspector = true
-    @State private var showDownload = false
+
+    /// The primary model when the table lists it (one loaded from a path
+    /// outside the model directories is not listed); else a loaded model that
+    /// generates text, then any listed one. A reranker or embedding model has
+    /// no generation defaults to show.
+    private var initialSelection: String? {
+        let models = model.models
+        if let primary = model.primaryModel, models.contains(where: { $0.selector == primary.selector }) {
+            return primary.selector
+        }
+        let generates: (LocalModel) -> Bool = { !$0.features.isDisjoint(with: [.tools, .thinking]) }
+        let loaded = models.filter { model.displayState(of: $0) == .loaded }
+        return (loaded.first(where: generates) ?? models.first(where: generates) ?? loaded.first ?? models.first)?.selector
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +36,7 @@ struct ModelsView: View {
             }
         }
         .navigationTitle("Models")
+        .navigationSubtitle("\(model.currentInstance.name) · \(model.models.count) models")
         .searchable(text: $query, placement: .toolbar, prompt: "Search")
         .toolbar {
             ToolbarItem {
@@ -32,7 +46,7 @@ struct ModelsView: View {
                 .pickerStyle(.segmented)
             }
             ToolbarItem {
-                Button { showDownload = true } label: { Label("Download", systemImage: "arrow.down.circle") }
+                Button { model.presentingDownload = true } label: { Label("Download", systemImage: "arrow.down.circle") }
             }
             ToolbarItem {
                 Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.trailing") }
@@ -50,8 +64,8 @@ struct ModelsView: View {
             .background(Palette.canvas)
             .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
         }
-        .sheet(isPresented: $showDownload) { DownloadSheet() }
-        .onAppear { selection = selection ?? model.primaryModel?.selector }
+        .sheet(isPresented: Bindable(model).presentingDownload) { DownloadSheet() }
+        .onAppear { selection = selection ?? initialSelection }
     }
 
     private var rows: [LocalModel] {
@@ -144,3 +158,9 @@ struct DownloadsList: View {
         return "\(Format.bytes(transfer.downloadedBytes))\(total)"
     }
 }
+
+#if DEBUG
+#Preview("Models", traits: .fixedLayout(width: 1070, height: 800)) {
+    NavigationStack { ModelsView() }.previewModel()
+}
+#endif

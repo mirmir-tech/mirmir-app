@@ -120,12 +120,25 @@ struct InstancePicker: View {
         } label: {
             HStack(spacing: 6) {
                 StatusDot(color: model.summary(for: model.currentInstance).status.color)
-                Text(model.currentInstance.name).font(.system(size: 11))
+                Text(label)
+                Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
             }
+            .font(.system(size: 11))
+            .foregroundStyle(Palette.muted)
+            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
+        // A plain button keeps the dot and the muted color the borderless
+        // menu style would replace with the accent.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
-        .foregroundStyle(Palette.muted)
+    }
+
+    private var label: String {
+        let instance = model.currentInstance
+        if case .remote(let endpoint) = instance.target { return "\(instance.name) · \(endpoint.address)" }
+        return instance.name
     }
 }
 
@@ -150,6 +163,7 @@ struct ModelSwitchMenu: View {
 }
 
 struct ActivityRow: View {
+    @Environment(AppModel.self) private var model
     let activity: Activity
 
     var body: some View {
@@ -160,7 +174,7 @@ struct ActivityRow: View {
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Palette.border, lineWidth: 0.5))
                 .foregroundStyle(Palette.muted)
             VStack(alignment: .leading, spacing: 1) {
-                Text(activity.target.isEmpty ? activity.kind.label : activity.target)
+                Text(model.displayTarget(of: activity))
                     .font(.system(size: 12, weight: .medium)).lineLimit(1)
                 Text([activity.kind.label, activity.detail].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1)
