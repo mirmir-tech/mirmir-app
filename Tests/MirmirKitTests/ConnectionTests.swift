@@ -23,8 +23,7 @@ struct ConnectionTests {
 
     @Test func targetsResolveToSockets() {
         let paths = SocketPaths(environment: ["HOME": "/h"])
-        #expect(paths.socket(for: .system) == "/run/mirmir/mirmir.sock")
-        #expect(paths.socket(for: .socket(path: "/tmp/a.sock")) == "/tmp/a.sock")
+        #expect(paths.socket(for: .personal) == "/h/.local/state/mirmir/mirmir.sock")
         #expect(paths.socket(for: .remote(RemoteEndpoint(host: "lab", port: 7443))) == nil)
     }
 
@@ -41,7 +40,7 @@ struct ConnectionTests {
 
     @Test func instanceRecordsRoundTrip() throws {
         let records = [
-            InstanceRecord(name: "Lab", target: .socket(path: "/tmp/lab.sock")),
+            InstanceRecord.thisMac,
             InstanceRecord(name: "CUDA", target: .remote(RemoteEndpoint(host: "lab-cuda-01", port: 7443, pinnedFingerprint: CertificateFingerprint(String(repeating: "4f", count: 32))))),
         ]
         let data = try JSONEncoder.mirmir.encode(records)

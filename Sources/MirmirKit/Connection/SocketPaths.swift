@@ -1,7 +1,9 @@
 import Foundation
 
-/// Resolves sockets exactly like mirmir's `config::Paths::discover`, so the
-/// app finds the same personal server as the CLI and TUI.
+/// Resolves the socket exactly like mirmir's `config::Paths::discover`. The
+/// app is sandboxed and its server inherits that sandbox, so `HOME` is the
+/// app's container for both: this is the bundled server's own socket, never
+/// the CLI's.
 public struct SocketPaths: Sendable {
     public let environment: [String: String]
     public let home: String
@@ -20,6 +22,14 @@ public struct SocketPaths: Sendable {
         return (home as NSString).appendingPathComponent(".local/state/mirmir")
     }
 
+    /// mirmir's `config.toml`, resolved like `Paths::discover`.
+    public var configFile: String {
+        let directory = environment["MIRMIR_CONFIG_HOME"]
+            ?? environment["XDG_CONFIG_HOME"].map { ($0 as NSString).appendingPathComponent("mirmir") }
+            ?? (home as NSString).appendingPathComponent(".config/mirmir")
+        return (directory as NSString).appendingPathComponent("config.toml")
+    }
+
     public var runtimeDirectory: String {
         if let runtime = environment["XDG_RUNTIME_DIR"] {
             return (runtime as NSString).appendingPathComponent("mirmir")
@@ -34,8 +44,6 @@ public struct SocketPaths: Sendable {
     public func socket(for target: InstanceTarget) -> String? {
         switch target {
         case .personal: personalSocket
-        case .system: InstanceTarget.systemSocket
-        case .socket(let path): (path as NSString).expandingTildeInPath
         case .remote: nil
         }
     }

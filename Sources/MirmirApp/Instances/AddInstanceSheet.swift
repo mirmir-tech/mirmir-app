@@ -1,20 +1,14 @@
 import MirmirKit
 import SwiftUI
 
-/// Adds a local socket or a remote server and tests it before saving. A remote
-/// server is checked step by step: its certificate fingerprint first, shown
-/// for comparison before any key is sent, then the key and protocol.
+/// Adds a remote server and tests it before saving, step by step: its
+/// certificate fingerprint first, shown for comparison before any key is
+/// sent, then the key and protocol. The sandboxed app reaches no other local
+/// socket than its bundled server's, so remote servers are the only kind.
 struct AddInstanceSheet: View {
-    enum Kind: String, CaseIterable, Identifiable {
-        case socket = "Unix socket", system = "System server", remote = "Remote server"
-        var id: String { rawValue }
-    }
-
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var kind: Kind = .remote
     @State private var name = ""
-    @State private var path = ""
     @State private var address = ""
     @State private var key = ""
     @State private var caIssued = false
@@ -32,18 +26,8 @@ struct AddInstanceSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Add Server").font(.system(size: 15, weight: .semibold))
             Form {
-                Picker("Kind", selection: $kind) {
-                    ForEach(Kind.allCases) { Text($0.rawValue).tag($0) }
-                }
                 TextField("Name", text: $name, prompt: Text(defaultName))
-                switch kind {
-                case .socket:
-                    TextField("Socket", text: $path, prompt: Text("/path/to/mirmir.sock")).font(.mono(12))
-                case .system:
-                    LabeledContent("Socket", value: InstanceTarget.systemSocket).font(.mono(12))
-                case .remote:
-                    remoteFields
-                }
+                remoteFields
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
@@ -54,7 +38,7 @@ struct AddInstanceSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(test == nil ? "Test Connection" : "Test Again", action: runTest)
-                    .disabled(target == nil || testing || (kind == .remote && key.isEmpty))
+                    .disabled(target == nil || testing || key.isEmpty)
                 Button("Add Server", action: add)
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canAdd)
@@ -63,7 +47,6 @@ struct AddInstanceSheet: View {
         .padding(20)
         .frame(width: 560)
         .background(Palette.canvas)
-        .onChange(of: kind) { resetCheck() }
     }
 
     @ViewBuilder private var remoteFields: some View {
@@ -94,20 +77,16 @@ struct AddInstanceSheet: View {
             case .failed(let message):
                 Label(message, systemImage: "xmark.circle.fill").foregroundStyle(Palette.danger).font(.system(size: 12))
             }
-        } else if kind == .remote, presented != nil, !trusted, !caIssued {
+        } else if presented != nil, !trusted, !caIssued {
             Label("Trust the certificate, then test again to send the key.", systemImage: "lock.shield")
                 .foregroundStyle(Palette.warning).font(.system(size: 12))
         }
     }
 
-    private var readingCertificate: Bool { kind == .remote && !caIssued && presented == nil }
+    private var readingCertificate: Bool { !caIssued && presented == nil }
 
     private var defaultName: String {
-        switch kind {
-        case .socket: (path as NSString).deletingLastPathComponent.split(separator: "/").last.map(String.init) ?? "Socket"
-        case .system: "System"
-        case .remote: RemoteEndpoint(address: address)?.host.split(separator: ".").first.map(String.init) ?? "Remote"
-        }
+        RemoteEndpoint(address: address)?.host.split(separator: ".").first.map(String.init) ?? "Remote"
     }
 
     /// The endpoint with the certificate the user trusted, if any.
@@ -118,18 +97,13 @@ struct AddInstanceSheet: View {
     }
 
     private var target: InstanceTarget? {
-        switch kind {
-        case .socket: path.isEmpty ? nil : .socket(path: path)
-        case .system: .system
-        case .remote: endpoint.map(InstanceTarget.remote)
-        }
+        endpoint.map(InstanceTarget.remote)
     }
 
     /// A remote server is saved only after a passing test, so its pinned
     /// certificate and key are known to work.
     private var canAdd: Bool {
         guard target != nil else { return false }
-        if kind != .remote { return true }
         if case .passed = test { return true }
         return false
     }
@@ -137,7 +111,7 @@ struct AddInstanceSheet: View {
     private func add() {
         guard let target else { return }
         let record = InstanceRecord(name: name.isEmpty ? defaultName : name, target: target)
-        model.add(record, key: kind == .remote ? key.trimmingCharacters(in: .whitespaces) : nil)
+        model.add(record, key: key.trimmingCharacters(in: .whitespaces))
         dismiss()
     }
 
@@ -154,18 +128,13 @@ struct AddInstanceSheet: View {
         Task {
             defer { testing = false }
             do {
-                let connection: RuntimeConnection
-                if case .remote(let endpoint) = target {
-                    if readingCertificate {
-                        presented = try await RuntimeConnection.presentedFingerprint(of: endpoint)
-                        return
-                    }
-                    if !caIssued, !trusted { return }
-                    connection = try await RuntimeConnection.connect(remote: endpoint, key: key.trimmingCharacters(in: .whitespaces))
-                } else {
-                    guard let socket = SocketPaths().socket(for: target) else { return }
-                    connection = try await RuntimeConnection.connect(socket: socket)
+                guard case .remote(let endpoint) = target else { return }
+                if readingCertificate {
+                    presented = try await RuntimeConnection.presentedFingerprint(of: endpoint)
+                    return
                 }
+                if !caIssued, !trusted { return }
+                let connection = try await RuntimeConnection.connect(remote: endpoint, key: key.trimmingCharacters(in: .whitespaces))
                 let models = (try? await connection.localModels().count) ?? 0
                 test = .passed(connection.health, models: models)
                 connection.close()

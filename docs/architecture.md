@@ -8,8 +8,7 @@ Product decisions: <https://claude.ai/artifact/KQwehDZuHXFEjDX3qzxqZy>
 The app is a SwiftUI client of mirmir's private `Runtime` gRPC service
 (`Proto/mirmir.proto`). It bundles mirmir (with libmir and MLX) as a separate
 helper process, `Contents/Helpers/mirmir`, but its own code never links the
-engine. For the local instance it attaches to a running `mirmir` server or
-starts the bundled one.
+engine. For the local instance it starts the bundled one inside its sandbox.
 
 Embedding `libmir` behind a C ABI was rejected:
 
@@ -49,14 +48,18 @@ enums once, in `MirmirKit/Protocol`. Views never compare strings.
 
 ## Instances and the connection
 
-`InstanceTarget` is `personal | system | socket(path) | remote(address)`.
+`InstanceTarget` is `personal | remote(address)`.
 The app has exactly one current connection; switching the instance in the
 sidebar or menu bar switches every screen.
 
-- **Personal** resolves the socket like `mirmir`'s `Paths::discover`:
-  `$XDG_RUNTIME_DIR/mirmir`, else `$MIRMIR_STATE_HOME`, `$XDG_STATE_HOME/mirmir`,
-  `~/.local/state/mirmir`, then `mirmir.sock`.
-- **System** is `/run/mirmir/mirmir.sock`; **socket** is any explicit path.
+- **Personal** is the app's own server. Its socket resolves like `mirmir`'s
+  `Paths::discover` (`$XDG_RUNTIME_DIR/mirmir`, else `$MIRMIR_STATE_HOME`,
+  `$XDG_STATE_HOME/mirmir`, `~/.local/state/mirmir`, then `mirmir.sock`), but
+  under the sandbox `HOME` is the container, so it is
+  `~/Library/Containers/tech.mirmir.app/Data/.local/state/mirmir/mirmir.sock`
+  (94 bytes, under the 104-byte limit). A CLI server's or the system server's
+  socket is outside the container and refused by the sandbox, so neither is
+  an instance kind; reach such a server as a remote one.
 - **Remote** is a server's TLS listener at `host:port` (default 7443). Every
   call carries `authorization: Bearer mmk_…`; the key lives in the Keychain
   (`CredentialStore`), never in `instances.json`. The certificate is pinned by
@@ -73,15 +76,36 @@ Mac (`RemoteAccessController`).
 Every connection checks `Health.protocol_version` against the client's
 protocol (`2`). A mismatch is the *Update needed* state.
 
+## Sandbox
+
+Both editions, the Developer ID DMG and the Mac App Store build, are
+sandboxed. `Resources/Mirmir.entitlements` grants the app `network.client`
+(remote servers, Hugging Face), `network.server` (the HTTP API and the remote
+listener), `files.user-selected.read-write` and `files.bookmarks.app-scope`.
+The helper is signed with `Resources/MirmirHelper.entitlements`: exactly
+`app-sandbox` and `inherit`, as the App Store requires for a bundled
+executable, so it runs in the app's sandbox and container.
+
+Model folders (`ModelFolders`) are chosen in an open panel and kept as
+security-scoped bookmarks in `model-folders.json`. Access starts when the
+store loads, before the server starts, and a child process inherits it; a
+granted folder was readable by the server both when granted while it ran and
+when granted before it started. A granted Hugging Face cache (a folder with
+`models--*`, or its `hub`) is passed as `HF_HUB_CACHE`, mirmir's external hub
+cache; changing it restarts the server. Other folders load by path. A
+`mirmir` configuration key for model folders is a later step.
+
 ## Local server lifecycle
 
-On launch the app connects to the personal socket. If no server answers (no
-socket, or a stale socket that refuses connections, which `mirmir serve`
-recovers) it starts `mirmir serve` as a child process: a path from settings,
-`MIRMIR_BINARY`, the binary bundled at `Mirmir.app/Contents/Helpers/mirmir`,
-else `mirmir` on `PATH`.
+On launch the app connects to its socket. If no server answers (no socket, or
+a stale socket that refuses connections, which `mirmir serve` recovers) it
+starts `Mirmir.app/Contents/Helpers/mirmir serve` as a child process; there is
+no other binary. On the first start, when the container has no
+`config.toml`, it runs `mirmir config set server.http_bind 127.0.0.1:18080`,
+so the app's HTTP API does not collide with a CLI server on 8080.
 
-The server writes to `~/Library/Logs/Mirmir/server.log`, never to pipes, and
+The server writes to `~/Library/Logs/Mirmir/server.log` in the container,
+never to pipes, and
 the Logs screen tails that file. With pipes, a server that outlived the app
 wrote into a closed pipe. Testing then showed a poisoned runtime lock in that
 orphaned server. The cause is not proven, but a file sidesteps it, and a
@@ -89,14 +113,15 @@ re-attached app still shows the log.
 
 An owned server is stopped with `SIGTERM` (graceful shutdown, 10 s before
 `SIGKILL`) on *Pause server* and on quit, including a quit caused by
-`SIGTERM`/`SIGINT` to the app. A server started by someone else (CLI, TUI,
-launchd) is attached and never stopped by the app.
+`SIGTERM`/`SIGINT` to the app. A server that outlived a crashed app is
+attached on the next launch and not stopped.
 
 The gRPC client sets the HTTP/2 `:authority` to `localhost` for Unix sockets.
 grpc-swift's default is the socket path, which is not a valid authority, and
 tonic rejects it.
 
-Later: an `SMAppService` launch agent so serving survives quitting the app.
+Later: an `SMAppService` launch agent so serving survives quitting the app,
+and a `mirmir` configuration key listing model folders.
 
 ## Protocol gaps (proposed `mirmir.proto` additions)
 

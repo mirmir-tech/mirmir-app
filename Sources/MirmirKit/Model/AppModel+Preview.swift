@@ -22,7 +22,8 @@ extension AppModel {
         let model = AppModel(
             paths: SocketPaths(environment: ["MIRMIR_STATE_HOME": scratch.path], home: scratch.path),
             supervisor: supervisor,
-            credentials: MemoryCredentials()
+            credentials: MemoryCredentials(),
+            modelFolders: ModelFolders(file: JSONFile(name: "model-folders.json", directory: scratch))
         )
         model.isPreview = true
         model.chat.persists = false
@@ -45,7 +46,7 @@ extension AppModel {
             ),
         ]
         supervisor.logs.append(lines: PreviewData.logLines, stream: .stderr)
-        supervisor.logs.note("started /opt/homebrew/bin/mirmir serve (pid 4242)")
+        supervisor.logs.note("started Mirmir.app/Contents/Helpers/mirmir serve (pid 4242)")
 
         switch scenario {
         case .startingServer:

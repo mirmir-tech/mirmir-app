@@ -1,23 +1,20 @@
 import Foundation
 
 /// Where a mirmir server can be reached. Mirrors mirmir's `Instance`.
+///
+/// The app is sandboxed: on this Mac it reaches only the server it bundles,
+/// whose socket lives in its container. The CLI's personal socket, the system
+/// socket and other sockets outside the container are not reachable, so they
+/// are not instances the app can hold.
 public enum InstanceTarget: Hashable, Sendable, Codable {
-    /// The per-user server whose socket is resolved like `Paths::discover`.
+    /// The bundled server, with its state and socket in the app's container.
     case personal
-    /// The shared system server at `/run/mirmir/mirmir.sock`.
-    case system
-    /// An explicitly selected Unix socket.
-    case socket(path: String)
     /// A remote server's TLS listener; its API key is kept in the Keychain.
     case remote(RemoteEndpoint)
-
-    public static let systemSocket = "/run/mirmir/mirmir.sock"
 
     public var kind: InstanceKind {
         switch self {
         case .personal: .personal
-        case .system: .system
-        case .socket: .socket
         case .remote: .remote
         }
     }
@@ -63,15 +60,13 @@ public struct RemoteEndpoint: Hashable, Sendable, Codable {
 }
 
 public enum InstanceKind: Sendable {
-    case personal, system, socket, remote
+    case personal, remote
 
     public var label: String {
         switch self {
         // mirmir calls it the personal instance; to the user it is the
         // server on this Mac, as opposed to a remote one.
         case .personal: "Local"
-        case .system: "System"
-        case .socket: "Socket"
         case .remote: "Remote"
         }
     }

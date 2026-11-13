@@ -18,7 +18,7 @@
 # Outside Workmir (no ../mirmir crate next to this repository) it does
 # nothing, and the app falls back to mirmir on PATH.
 #
-#   MIRMIR_HELPER=skip       do not build or embed the runtime
+#   MIRMIR_HELPER=skip       do not build or embed the runtime (no local server)
 #   MIRMIR_CARGO_PROFILE=dev build an unoptimized server (default: release)
 set -euo pipefail
 
@@ -27,7 +27,7 @@ workmir="$(cd "$app_root/.." && pwd)"
 crate="$workmir/mirmir"
 
 if [[ "${MIRMIR_HELPER:-}" == skip ]]; then
-    echo "note: MIRMIR_HELPER=skip; the app uses mirmir from PATH"
+    echo "note: MIRMIR_HELPER=skip; the app has no local server, only remote ones"
     exit 0
 fi
 if [[ ! -f "$crate/Cargo.toml" || ! -f "$workmir/.cargo/config.toml" ]]; then
@@ -92,7 +92,7 @@ framework="$frameworks/MLX.framework"
 # their sources. Touching them when nothing changed would break the app's seal
 # on incremental builds, where Xcode does not re-sign.
 stamp="$DERIVED_FILE_DIR/mirmir-runtime.sha256"
-digest="$(cat "$binary" "$mlx_lib/libmlx.dylib" "$mlx_lib/libjaccl.dylib" "$mlx_lib/mlx.metallib" | shasum -a 256 | cut -d' ' -f1)"
+digest="$(cat "$binary" "$mlx_lib/libmlx.dylib" "$mlx_lib/libjaccl.dylib" "$mlx_lib/mlx.metallib" "$app_root/Resources/MirmirHelper.entitlements" | shasum -a 256 | cut -d' ' -f1)"
 identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 if [[ "${CONFIGURATION:-Debug}" == Debug ]]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
 
@@ -140,7 +140,9 @@ PLIST
     sign() { codesign --force --sign "$identity" --options runtime "$timestamp" "$@"; }
     sign "$frameworks/libjaccl.dylib"
     sign "$framework"
-    sign --identifier tech.mirmir.app.server "$helpers/mirmir"
+    # The helper inherits the app's sandbox; App Store helpers carry exactly
+    # app-sandbox and inherit.
+    sign --identifier tech.mirmir.app.server --entitlements "$app_root/Resources/MirmirHelper.entitlements" "$helpers/mirmir"
     mkdir -p "$DERIVED_FILE_DIR"
     echo "$digest" > "$stamp"
 fi

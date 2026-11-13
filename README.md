@@ -52,10 +52,12 @@ as a separate process. Its SwiftUI code links no Rust crate: it is a client of
 that runtime's `Runtime` gRPC service, the same service the CLI and TUI use,
 so a remote server is driven exactly like the bundled one.
 
-- **This Mac.** The app attaches to the personal server through its Unix
-  socket, resolved like `mirmir` does, or starts `mirmir serve` when none
-  answers. Quitting stops a server the app started; one you started keeps
-  running.
+- **This Mac.** The app is sandboxed and starts its bundled `mirmir serve`,
+  which inherits the sandbox: its configuration, models, socket and logs live
+  in the app's container, apart from the CLI's, and its OpenAI-compatible API
+  listens on `127.0.0.1:18080`. It reads only the model folders granted in
+  Settings (security-scoped bookmarks; a Hugging Face cache reaches it as
+  `HF_HUB_CACHE`). Quitting stops it.
 - **Remote servers.** Calls go over HTTP/2 with TLS and carry an API key with
   the `use` or `control` scope, kept in the login Keychain. The server's
   self-signed certificate is shown before the key is sent and pinned on first
@@ -71,8 +73,8 @@ protocol gaps that are still open.
 1. [Download MiRMiR for Mac](https://github.com/mirmir-tech/mirmir-app/releases/latest/download/Mirmir-macOS.dmg),
    open the disk image and drag Mirmir to Applications. It is signed and
    notarized and needs macOS 27 or later on Apple silicon.
-2. Start Mirmir. It includes the runtime (mirmir 0.6.0 and MLX); the CLI is
-   optional and shares its server. Its guide is at
+2. Start Mirmir. It includes the runtime (mirmir 0.6.0 and MLX) and runs its
+   own server, separate from the CLI's. Its guide is at
    [docs.mirmir.tech](https://docs.mirmir.tech/getting-started/mac-app.html).
 
 ## Requirements for development
@@ -105,13 +107,14 @@ Inside a Workmir checkout, the `Embed mirmir helper` build phase
 `../mirmir` and embeds the runtime: `Contents/Helpers/mirmir`,
 `Contents/Frameworks/MLX.framework` (libmlx with `mlx.metallib` in its
 Resources) and `libjaccl.dylib`, relinked to `@rpath` and signed with the
-app's identity and hardened runtime. The app then needs nothing installed and
-starts a server matching its protocol. From a
+app's identity and hardened runtime, with `Resources/MirmirHelper.entitlements`
+(the sandbox, inherited from the app). The app then needs nothing installed
+and starts a server matching its protocol. From a
 clean checkout it first installs the MLX release pinned in
 `../scripts/mlx/version.env` (via `scripts/mlx/setup.sh`, outside Xcode's
 build environment) when `.native/mlx` does not point at it. It needs
 `rustup`, `cmake`, `ninja` and the Metal toolchain, and says which is missing.
-`MIRMIR_HELPER=skip` turns it off (the app then uses `mirmir` from `PATH`)
+`MIRMIR_HELPER=skip` turns it off (the app then has only remote servers)
 and `MIRMIR_CARGO_PROFILE=dev` builds an unoptimized server.
 
 Every screen has `#Preview`s on sample data from `AppModel.preview(_:)`

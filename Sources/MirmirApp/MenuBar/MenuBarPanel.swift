@@ -136,7 +136,7 @@ struct ServerToggle: View {
             Button {} label: { Label("Pause Server", systemImage: "pause.fill") }
                 .controlSize(.small)
                 .disabled(true)
-                .help("This server was started outside the app. Stop it where it was started.")
+                .help("This server was started by an earlier run of the app. Quit and reopen Mirmir to restart it.")
         }
     }
 }

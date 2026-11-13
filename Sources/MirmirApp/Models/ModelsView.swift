@@ -1,3 +1,4 @@
+import AppKit
 import MirmirKit
 import SwiftUI
 
@@ -27,6 +28,17 @@ struct ModelsView: View {
         return (loaded.first(where: generates) ?? models.first(where: generates) ?? loaded.first ?? models.first)?.selector
     }
 
+    /// The sandbox lets the server read a model only from a folder the user
+    /// chose; choosing it grants the folder and loads the model in it.
+    private func loadFromFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Load"
+        panel.message = "Choose a model folder: the one with config.json and the weights"
+        if panel.runModal() == .OK, let url = panel.url { model.loadModel(at: url) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if filter == .downloads {
@@ -44,6 +56,10 @@ struct ModelsView: View {
                     ForEach(ModelFilter.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+            }
+            ToolbarItem {
+                Button(action: loadFromFolder) { Label("Load from Folder", systemImage: "folder") }
+                    .help("Load a model from a folder on this Mac")
             }
             ToolbarItem {
                 Button { model.presentingDownload = true } label: { Label("Download", systemImage: "arrow.down.circle") }

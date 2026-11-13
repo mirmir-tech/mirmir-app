@@ -41,9 +41,13 @@ instance management. It bundles mirmir as a helper process
 
 ## Running against a test server
 
-The app resolves the personal socket like mirmir (`XDG_RUNTIME_DIR`,
-`MIRMIR_STATE_HOME`, `XDG_STATE_HOME`, `~/.local/state/mirmir`) and starts
-`MIRMIR_BINARY` or `mirmir` from `PATH` when no server answers. To avoid
-touching the user's models, point `MIRMIR_CONFIG_HOME` and `MIRMIR_STATE_HOME`
-at a scratch directory and `XDG_RUNTIME_DIR` at a short path: Unix socket
-paths are limited to 104 bytes.
+The app is sandboxed (`Resources/Mirmir.entitlements`) and runs only its
+bundled `Contents/Helpers/mirmir`, which inherits the sandbox
+(`Resources/MirmirHelper.entitlements`). Its server lives in the container
+`~/Library/Containers/tech.mirmir.app/Data` (config, models, socket, logs) and
+serves HTTP on `127.0.0.1:18080`, so it never touches the CLI's models or
+server. Delete that container for a first-launch test. Do not add instance
+kinds or binary lookups outside the container: the sandbox refuses the CLI
+and system sockets, and `PATH`. Other folders reach the server only as
+user-granted model folders (`ModelFolders`). Unix socket paths are limited to
+104 bytes; the container socket is 94.

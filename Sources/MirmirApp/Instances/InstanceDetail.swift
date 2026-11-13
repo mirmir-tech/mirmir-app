@@ -44,9 +44,7 @@ struct InstanceDetail: View {
 
     private var heading: String {
         switch record.target {
-        case .personal: "LOCAL · personal socket"
-        case .system: "LOCAL · system socket"
-        case .socket: "LOCAL · Unix socket"
+        case .personal: "LOCAL · bundled runtime"
         case .remote: "REMOTE · gRPC + TLS"
         }
     }

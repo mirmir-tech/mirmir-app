@@ -22,7 +22,7 @@ extension AppModel {
             } catch {
                 if Task.isCancelled { return }
                 if shouldStartServer(for: instance, after: error, startedAt: startedAt) {
-                    supervisor.start()
+                    supervisor.start(environment: modelFolders.serverEnvironment)
                     startedAt = Date()
                 }
                 if let startedAt, waitingForServer(since: startedAt) {

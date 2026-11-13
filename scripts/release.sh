@@ -2,6 +2,7 @@
 # Builds, signs, notarizes and packages Mirmir for distribution. macOS only.
 #
 #   scripts/release.sh [--skip-notarize]
+#   scripts/release.sh --app-store [--upload]
 #
 #   MIRMIR_APP_VERSION     marketing version (default 0.6.0)
 #   MIRMIR_SIGN_IDENTITY   code signing identity (default "Developer ID Application")
@@ -20,6 +21,21 @@
 # releases/latest/download/). The app contains the mirmir runtime and MLX
 # (see scripts/xcode-helper.sh); it needs nothing installed.
 #
+# --app-store builds the Mac App Store edition instead: an archive signed with
+# Apple Distribution and the Mac App Store provisioning profile, packaged as
+# build/release/Mirmir-<version>.pkg, signed with the installer certificate.
+# --upload also sends it to App Store Connect. It needs, from the developer
+# account: the Apple Distribution and Mac Installer Distribution certificates
+# in the login keychain, a Mac App Store profile for tech.mirmir.app (installed
+# by double-clicking it) and an App Store Connect record for the app.
+#
+#   MIRMIR_APPSTORE_PROFILE  name of that profile (default "Mirmir Mac App Store")
+#   MIRMIR_ASC_KEY_ID        App Store Connect API key for --upload, its .p8 in
+#   MIRMIR_ASC_ISSUER        ~/.appstoreconnect/private_keys, and its issuer
+#
+# Both editions run sandboxed (Resources/Mirmir.entitlements): the app's
+# server lives in its container, apart from the mirmir CLI.
+#
 # Laying out the disk image window drives Finder through AppleScript: the
 # first run asks to let the terminal control Finder.
 set -euo pipefail
@@ -28,9 +44,13 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 notarize=true
+app_store=false
+upload=false
 for argument in "$@"; do
     case "$argument" in
         --skip-notarize) notarize=false ;;
+        --app-store) app_store=true ;;
+        --upload) upload=true ;;
         *) echo "unknown argument: $argument" >&2; exit 2 ;;
     esac
 done
@@ -45,6 +65,12 @@ out="build/release"
 work="$out/work"
 
 step() { printf '\n==> %s\n' "$*"; }
+fail() { echo "error: $*" >&2; exit 1; }
+
+if $upload && ! $app_store; then fail "--upload goes with --app-store"; fi
+if $app_store; then
+    exec "$root/scripts/release/app-store.sh" "$version" "$build_number" "$team" "$upload"
+fi
 
 if $notarize && ! xcrun notarytool history --keychain-profile "$profile" >/dev/null 2>&1; then
     echo "error: no notarytool profile '$profile'; create it (see the header) or pass --skip-notarize" >&2
@@ -73,13 +99,12 @@ codesign --verify --deep --strict --verbose=2 "$app"
 details="$(codesign -dvv "$app" 2>&1)"
 grep -q "Authority=Developer ID Application" <<<"$details" || { echo "error: not signed with a Developer ID" >&2; exit 1; }
 grep -q "flags=.*runtime" <<<"$details" || { echo "error: hardened runtime is off" >&2; exit 1; }
-if codesign -d --entitlements - "$app" 2>/dev/null | grep -q "get-task-allow"; then
-    echo "error: the app carries get-task-allow, which notarization refuses" >&2
-    exit 1
-fi
+"$root/scripts/release/check-sandbox.sh" "$app"
 
 step "Checking the bundled runtime"
-"$app/Contents/Helpers/mirmir" --version
+# The helper inherits the app's sandbox, so it runs only as the app's child
+# (alone it traps); check the binary instead of running it.
+lipo -archs "$app/Contents/Helpers/mirmir" | grep -qx arm64 || { echo "error: the bundled mirmir is not arm64" >&2; exit 1; }
 while IFS= read -r -d '' file; do
     if file -b "$file" | grep -q "Mach-O" && otool -L "$file" | tail -n +2 | grep -q "/Users/"; then
         echo "error: $file links a library on this machine:" >&2

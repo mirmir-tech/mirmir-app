@@ -39,6 +39,8 @@ public final class AppModel {
 
     public let supervisor: ServerSupervisor
     public let chat: ChatController
+    /// Folders outside the container the user granted, for models.
+    public let modelFolders: ModelFolders
     let paths: SocketPaths
     let credentials: any CredentialStore
     let instanceFile = JSONFile<[InstanceRecord]>(name: "instances.json")
@@ -54,17 +56,16 @@ public final class AppModel {
     public init(
         paths: SocketPaths = SocketPaths(),
         supervisor: ServerSupervisor = ServerSupervisor(),
-        credentials: any CredentialStore = Credentials.platformDefault
+        credentials: any CredentialStore = Credentials.platformDefault,
+        modelFolders: ModelFolders = ModelFolders()
     ) {
+        self.modelFolders = modelFolders
         self.paths = paths
         self.credentials = credentials
         self.supervisor = supervisor
         self.chat = ChatController()
         var stored = instanceFile.load() ?? []
         stored.removeAll { $0.isThisMac }
-        if stored.isEmpty, SocketPaths.isSocket(InstanceTarget.systemSocket) {
-            stored.append(InstanceRecord(name: "System", target: .system))
-        }
         instances = [.thisMac] + stored
         currentInstanceID = InstanceRecord.thisMacID
         chat.model = self
@@ -126,7 +127,7 @@ public final class AppModel {
     public func resumeServer() {
         serverPaused = false
         if currentInstance.isThisMac, connection == nil {
-            supervisor.start()
+            supervisor.start(environment: modelFolders.serverEnvironment)
             connectCurrent()
         }
     }
