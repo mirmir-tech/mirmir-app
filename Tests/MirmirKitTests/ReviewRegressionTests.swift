@@ -74,20 +74,20 @@ struct ServerSwitchTests {
 @Suite("Image requests")
 struct ImageRequestTests {
     private let turns = [
-        ChatTurn(role: .user, content: "first"),
-        ChatTurn(role: .assistant, content: "reply"),
         ChatTurn(role: .user, content: "Describe this image"),
+        ChatTurn(role: .assistant, content: "A red square."),
+        ChatTurn(role: .user, content: "What color is it?"),
     ]
 
-    @Test func theLastUserTurnCarriesTheImageMarker() {
-        let wire = GenerationRequest(model: "m", turns: turns, image: Data([1, 2, 3])).wire
-        #expect(wire.messages.map(\.content) == ["first", "reply", "<|mirmir_image|>\nDescribe this image"])
+    @Test func theImageTurnCarriesTheMarker() {
+        let wire = GenerationRequest(model: "m", turns: turns, image: TurnImage(data: Data([1, 2, 3]), turn: 0)).wire
+        #expect(wire.messages.map(\.content) == ["<|mirmir_image|>\nDescribe this image", "A red square.", "What color is it?"])
         #expect(wire.image == Data([1, 2, 3]))
     }
 
     @Test func textOnlyRequestsAreUnchanged() {
         let wire = GenerationRequest(model: "m", turns: turns).wire
-        #expect(wire.messages.map(\.content) == ["first", "reply", "Describe this image"])
+        #expect(wire.messages.map(\.content) == ["Describe this image", "A red square.", "What color is it?"])
     }
 }
 

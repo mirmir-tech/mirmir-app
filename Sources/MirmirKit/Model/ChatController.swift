@@ -23,6 +23,8 @@ public final class ChatController {
     private var lastStreamWrite: ContinuousClock.Instant?
     /// Off for previews, so sample chats never reach `chats.json`.
     var persists = true
+    /// Images attached to messages, sent again with every later turn.
+    var attachments = AttachmentStore()
 
     init() {
         conversations = (file.load() ?? []).map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
@@ -61,6 +63,9 @@ public final class ChatController {
 
     public func delete(_ id: UUID) {
         if id == selectedID { stop() }
+        if persists, let conversation = conversations.first(where: { $0.id == id }) {
+            conversation.storedImages.forEach(attachments.remove)
+        }
         conversations.removeAll { $0.id == id }
         if selectedID == id { selectedID = visibleConversations.first?.id }
         persist()
@@ -70,6 +75,9 @@ public final class ChatController {
         update(id) { $0.model = selector }
     }
 
+    /// Sends a message. `image` must already be normalized for the server
+    /// (`ImageNormalizer`); it is kept with the message, so later turns and
+    /// a reopened chat still send it.
     public func send(_ text: String, image: Data? = nil) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, generation == nil, let connection = model?.connection else { return }
@@ -82,16 +90,27 @@ public final class ChatController {
             model?.notice = "Choose a loaded model before sending."
             return
         }
+        var attached: MessageImage?
+        if let image {
+            do {
+                attached = .stored(persists ? try attachments.save(image) : UUID())
+            } catch {
+                model?.notice = "Could not keep the image: \(error.localizedDescription)"
+                return
+            }
+        }
         let reply = ChatMessage(body: .assistant(text: "", reasoning: "", thinkingSeconds: nil, state: .streaming))
         update(id) { conversation in
             if conversation.messages.isEmpty { conversation.title = String(text.prefix(60)) }
-            conversation.messages.append(ChatMessage(body: .user(text: text, hasImage: image != nil)))
+            conversation.messages.append(ChatMessage(body: .user(text: text, image: attached)))
             conversation.messages.append(reply)
         }
-        let turns = (conversations.first { $0.id == id }?.messages ?? []).dropLast().compactMap(\.turn)
-        let request = GenerationRequest(
-            model: conversation.model, turns: Array(turns), maxTokens: maxTokens, temperature: temperature, image: image
-        )
+        guard let updated = conversations.first(where: { $0.id == id }) else { return }
+        let attachments = attachments
+        let request = updated.request(replyingTo: reply.id, maxTokens: maxTokens, temperature: temperature) { stored in
+            // The new image is in memory; earlier ones come from disk.
+            if case .stored(stored) = attached, let image { image } else { attachments.load(stored) }
+        }
         let stream = ReplyAccumulator()
         generation = Task {
             do {

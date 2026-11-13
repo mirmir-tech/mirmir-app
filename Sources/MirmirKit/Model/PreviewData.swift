@@ -91,7 +91,7 @@ enum PreviewData {
         return [
             Conversation(instanceID: InstanceRecord.thisMacID, title: "Refactor the K/V history module", model: models[0].selector, updatedAt: now, messages: [
                 ChatMessage(date: now.addingTimeInterval(-60), body: .user(
-                    text: "How should I split the K/V history module so files stay under 250 lines?", hasImage: false
+                    text: "How should I split the K/V history module so files stay under 250 lines?", image: nil
                 )),
                 ChatMessage(date: now.addingTimeInterval(-55), body: .assistant(
                     text: streaming ? String(reply.prefix(120)) : reply,
@@ -101,7 +101,7 @@ enum PreviewData {
             ]),
             Conversation(instanceID: InstanceRecord.thisMacID, title: "Explain prefix caching", model: models[1].selector,
                          updatedAt: now.addingTimeInterval(-7_200), messages: [
-                ChatMessage(body: .user(text: "Explain prefix caching in two sentences.", hasImage: false)),
+                ChatMessage(body: .user(text: "Explain prefix caching in two sentences.", image: nil)),
                 ChatMessage(body: .assistant(
                     text: "Requests that share a prompt prefix reuse its K/V blocks instead of recomputing them. "
                         + "Prefill then starts at the first token that differs.",

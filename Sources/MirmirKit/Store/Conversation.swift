@@ -8,11 +8,6 @@ public enum ReplyState: Hashable, Sendable, Codable {
     case failed(message: String)
 }
 
-public enum MessageBody: Hashable, Sendable, Codable {
-    case user(text: String, hasImage: Bool)
-    case assistant(text: String, reasoning: String, thinkingSeconds: Double?, state: ReplyState)
-}
-
 public struct ChatMessage: Identifiable, Hashable, Sendable, Codable {
     public let id: UUID
     public let date: Date

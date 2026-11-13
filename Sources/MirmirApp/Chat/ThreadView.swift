@@ -35,11 +35,15 @@ struct MessageView: View {
 
     var body: some View {
         switch message.body {
-        case .user(let text, let hasImage):
+        case .user(let text, let image):
             HStack {
                 Spacer(minLength: 120)
                 VStack(alignment: .trailing, spacing: 4) {
-                    if hasImage { Label("Image attached", systemImage: "photo").font(.system(size: 11)).opacity(0.85) }
+                    switch image {
+                    case .stored: Label("Image attached", systemImage: "photo").font(.system(size: 11)).opacity(0.85)
+                    case .unavailable: Label("Image not kept", systemImage: "photo.badge.exclamationmark").font(.system(size: 11)).opacity(0.85)
+                    case nil: EmptyView()
+                    }
                     Text(text).textSelection(.enabled)
                 }
                 .padding(.horizontal, 13)
@@ -120,6 +124,7 @@ struct Composer: View {
     let conversation: Conversation
     @State private var draft = ""
     @State private var image: Data?
+    @State private var preparingImage = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -129,10 +134,14 @@ struct Composer: View {
                 .padding(EdgeInsets(top: 11, leading: 14, bottom: 4, trailing: 14))
                 .onSubmit(send)
             HStack(spacing: 6) {
-                Button(action: attach) { Image(systemName: image == nil ? "paperclip" : "photo.fill") }
-                    .buttonStyle(.borderless)
-                    .disabled(!(model.model(selector: conversation.model)?.imageInput ?? false))
-                    .help("Attach an image for vision models")
+                if preparingImage {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(action: attach) { Image(systemName: image == nil ? "paperclip" : "photo.fill") }
+                        .buttonStyle(.borderless)
+                        .disabled(!(model.model(selector: conversation.model)?.imageInput ?? false))
+                        .help("Attach an image for vision models. It stays with the conversation; a new one replaces it.")
+                }
                 Spacer()
                 if let tokens = conversation.contextTokens {
                     Text("\(Format.grouped(tokens)) tokens").font(.mono(11)).foregroundStyle(.secondary)
@@ -144,7 +153,7 @@ struct Composer: View {
                 } else {
                     Button(action: send) { Image(systemName: "arrow.up") }
                         .buttonStyle(.borderedProminent).clipShape(Circle())
-                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(preparingImage || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return, modifiers: .command)
                         .accessibilityLabel("Send")
                 }
@@ -163,7 +172,7 @@ struct Composer: View {
     }
 
     private func send() {
-        guard !model.chat.isGenerating else { return }
+        guard !model.chat.isGenerating, !preparingImage else { return }
         model.chat.send(draft, image: image)
         draft = ""
         image = nil
@@ -171,9 +180,22 @@ struct Composer: View {
 
     private func attach() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .webP, .heic, .tiff]
         panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url { image = try? Data(contentsOf: url) }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        preparingImage = true
+        Task {
+            // HEIC and TIFF become JPEG for the server's decoder; decoding a
+            // photo takes a while, so it runs off the main actor.
+            let prepared = await Task.detached(priority: .userInitiated) { () -> Result<Data, any Error> in
+                Result { try ImageNormalizer.normalized(try Data(contentsOf: url)) }
+            }.value
+            preparingImage = false
+            switch prepared {
+            case .success(let data): image = data
+            case .failure(let error): model.notice = "\(url.lastPathComponent): \(error.localizedDescription)"
+            }
+        }
     }
 }
 

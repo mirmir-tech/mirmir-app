@@ -84,8 +84,8 @@ extension GenerationRequest {
         var request = Mirmir_V1_GenerateRequest()
         request.model = model
         // The engine places the image where its marker is and requires exactly
-        // one; like the TUI and web chat, it goes before the last user turn.
-        let imageTurn = image == nil ? nil : turns.lastIndex { $0.role == .user }
+        // one: before the text of the turn the image was attached to.
+        let imageTurn = image?.turn
         request.messages = turns.enumerated().map { index, turn in
             var message = Mirmir_V1_ChatMessageInput()
             message.role = turn.role.rawValue
@@ -95,7 +95,7 @@ extension GenerationRequest {
         }
         if let maxTokens { request.maxTokens = maxTokens }
         if let temperature { request.temperature = temperature }
-        if let image { request.image = image }
+        if let image { request.image = image.data }
         return request
     }
 }
