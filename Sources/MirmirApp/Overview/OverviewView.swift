@@ -59,7 +59,7 @@ struct KPIRow: View {
             tile("TTFT", Palette.muted, Format.seconds(fromMilliseconds: snapshot?.currentTTFTMs ?? snapshot?.lastTTFTMs), "s",
                  note: "mean \(Format.seconds(fromMilliseconds: snapshot?.meanTTFTMs)) s · \(Format.grouped(snapshot?.totalRequests ?? 0)) requests")
             tile("MEMORY", Palette.muted, snapshot?.memory.map { Format.gigabytes($0.usedBytes) } ?? "—", "GB",
-                 note: snapshot?.memory.map { "\(Format.percent($0.usedRatio))% of \(Format.gigabytes($0.totalBytes)) GB · \($0.source)" } ?? "not reported")
+                 note: snapshot?.memory.map { "\(Format.percent($0.usedRatio))% of \(Format.gigabytes($0.totalBytes)) GB · \($0.pool.label)" } ?? "not reported")
         }
     }
 
@@ -136,7 +136,7 @@ struct MemoryChart: View {
                 Text("Memory").font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if let memory = samples.last?.memory {
-                    Text("\(memory.source) · limit \(Format.gigabytes(memory.totalBytes)) GB")
+                    Text("\(memory.pool.label) · limit \(Format.gigabytes(memory.totalBytes)) GB")
                         .font(.mono(11)).foregroundStyle(Palette.muted).lineLimit(1)
                 }
             }

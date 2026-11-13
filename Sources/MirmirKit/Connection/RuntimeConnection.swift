@@ -11,21 +11,21 @@ public final class RuntimeConnection: Sendable {
     let grpc: GRPCClient<Transport>
     let runtime: Mirmir_V1_Runtime.Client<Transport>
     private let connections: Task<Void, Never>
-    public let socket: String
+    /// The socket path, or `host:port` of a remote server.
+    public let address: String
     public let health: ServerHealth
 
-    private init(grpc: GRPCClient<Transport>, connections: Task<Void, Never>, socket: String, health: ServerHealth) {
+    private init(grpc: GRPCClient<Transport>, connections: Task<Void, Never>, address: String, health: ServerHealth) {
         self.grpc = grpc
         self.runtime = Mirmir_V1_Runtime.Client(wrapping: grpc)
         self.connections = connections
-        self.socket = socket
+        self.address = address
         self.health = health
     }
 
     /// Connects to a Unix socket and validates the protocol version.
     public static func connect(socket: String) async throws(ConnectionError) -> RuntimeConnection {
         guard SocketPaths.isSocket(socket) else { throw .noServer(socket: socket) }
-        let grpc: GRPCClient<Transport>
         do {
             let transport = try HTTP2ClientTransport.Posix(
                 // The default authority is the socket path, which is not a
@@ -33,10 +33,43 @@ public final class RuntimeConnection: Sendable {
                 target: .unixDomainSocket(path: socket, authority: "localhost"),
                 transportSecurity: .plaintext
             )
-            grpc = GRPCClient(transport: transport)
+            return try await open(transport, interceptors: [], address: socket)
         } catch {
             throw ConnectionError.wrap(error)
         }
+    }
+
+    /// Connects to a remote server's TLS listener with its API key. A pinned
+    /// fingerprint accepts exactly that certificate; without one the
+    /// certificate must chain to a system CA.
+    public static func connect(remote endpoint: RemoteEndpoint, key: String) async throws(ConnectionError) -> RuntimeConnection {
+        let presented = PresentedCertificate()
+        let security = endpoint.pinnedFingerprint.map { RemoteTLS.pinned($0, presented: presented) } ?? RemoteTLS.systemTrust
+        do {
+            let transport = try HTTP2ClientTransport.Posix(target: endpoint.target, transportSecurity: security)
+            return try await open(transport, interceptors: [BearerKey(key)], address: endpoint.address)
+        } catch {
+            throw ConnectionError.remote(
+                error, address: endpoint.address, pinned: endpoint.pinnedFingerprint, presented: presented.fingerprint
+            )
+        }
+    }
+
+    /// The certificate fingerprint a remote server presents, read without
+    /// trusting it or sending a key: shown before pinning on first use.
+    public static func presentedFingerprint(of endpoint: RemoteEndpoint) async throws(ConnectionError) -> CertificateFingerprint {
+        do {
+            return try await RemoteTLS.presentedFingerprint(host: endpoint.host, port: endpoint.port)
+        } catch {
+            if let error = error as? ConnectionError { throw error }
+            throw .unreachable(address: endpoint.address, detail: error.localizedDescription)
+        }
+    }
+
+    private static func open(
+        _ transport: Transport, interceptors: [any ClientInterceptor], address: String
+    ) async throws -> RuntimeConnection {
+        let grpc = GRPCClient(transport: transport, interceptors: interceptors)
         let connections = Task<Void, Never> { _ = try? await grpc.runConnections() }
         let runtime = Mirmir_V1_Runtime.Client(wrapping: grpc)
         do {
@@ -47,11 +80,11 @@ public final class RuntimeConnection: Sendable {
             if case .updateNeeded(let server) = ProtocolCompatibility(health: health) {
                 throw ConnectionError.updateNeeded(serverProtocol: server, serverVersion: health.serverVersion)
             }
-            return RuntimeConnection(grpc: grpc, connections: connections, socket: socket, health: health)
+            return RuntimeConnection(grpc: grpc, connections: connections, address: address, health: health)
         } catch {
             grpc.beginGracefulShutdown()
             connections.cancel()
-            throw ConnectionError.wrap(error)
+            throw error
         }
     }
 

@@ -1,7 +1,6 @@
 import Foundation
 
-/// Where a mirmir server can be reached. Mirrors mirmir's `Instance`, plus the
-/// planned remote target from the product decisions.
+/// Where a mirmir server can be reached. Mirrors mirmir's `Instance`.
 public enum InstanceTarget: Hashable, Sendable, Codable {
     /// The per-user server whose socket is resolved like `Paths::discover`.
     case personal
@@ -9,7 +8,7 @@ public enum InstanceTarget: Hashable, Sendable, Codable {
     case system
     /// An explicitly selected Unix socket.
     case socket(path: String)
-    /// A remote server over gRPC + TLS. Not served by mirmir yet.
+    /// A remote server's TLS listener; its API key is kept in the Keychain.
     case remote(RemoteEndpoint)
 
     public static let systemSocket = "/run/mirmir/mirmir.sock"
@@ -25,18 +24,42 @@ public enum InstanceTarget: Hashable, Sendable, Codable {
 }
 
 public struct RemoteEndpoint: Hashable, Sendable, Codable {
+    public static let defaultPort = 7443
+
     public var host: String
     public var port: Int
-    /// SHA-256 fingerprint pinned on first use. `nil` until trusted.
-    public var pinnedFingerprint: String?
+    /// The certificate trusted on first use. `nil` trusts CA-issued
+    /// certificates through the system roots instead.
+    public var pinnedFingerprint: CertificateFingerprint?
 
-    public init(host: String, port: Int, pinnedFingerprint: String? = nil) {
+    public init(host: String, port: Int = Self.defaultPort, pinnedFingerprint: CertificateFingerprint? = nil) {
         self.host = host
         self.port = port
         self.pinnedFingerprint = pinnedFingerprint
     }
 
-    public var address: String { "\(host):\(port)" }
+    /// Parses `host`, `host:port`, `[v6]` or `[v6]:port`.
+    public init?(address: String) {
+        let text = address.trimmingCharacters(in: .whitespaces)
+        var host = text
+        var port = Self.defaultPort
+        if text.hasPrefix("["), let close = text.firstIndex(of: "]") {
+            host = String(text[text.index(after: text.startIndex)..<close])
+            let rest = text[text.index(after: close)...]
+            if rest.hasPrefix(":") {
+                guard let parsed = Int(rest.dropFirst()) else { return nil }
+                port = parsed
+            }
+        } else if text.filter({ $0 == ":" }).count == 1, let colon = text.firstIndex(of: ":") {
+            host = String(text[..<colon])
+            guard let parsed = Int(text[text.index(after: colon)...]) else { return nil }
+            port = parsed
+        }
+        guard !host.isEmpty, (1...65535).contains(port) else { return nil }
+        self.init(host: host, port: port)
+    }
+
+    public var address: String { host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)" }
 }
 
 public enum InstanceKind: Sendable {

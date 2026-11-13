@@ -55,11 +55,21 @@ sidebar or menu bar switches every screen.
   `$XDG_RUNTIME_DIR/mirmir`, else `$MIRMIR_STATE_HOME`, `$XDG_STATE_HOME/mirmir`,
   `~/.local/state/mirmir`, then `mirmir.sock`.
 - **System** is `/run/mirmir/mirmir.sock`; **socket** is any explicit path.
-- **Remote** is stored with its address and shown, but connecting reports that
-  the server side (TLS listener, API keys, scopes) is not implemented yet.
+- **Remote** is a server's TLS listener at `host:port` (default 7443). Every
+  call carries `authorization: Bearer mmk_…`; the key lives in the Keychain
+  (`CredentialStore`), never in `instances.json`. The certificate is pinned by
+  its SHA-256 fingerprint, read without trusting it or sending the key and
+  confirmed by the user in Add Server (`RemoteTLS`, NIOSSL's verification
+  callback). A different certificate later is *certificate changed*. Without a
+  pin the certificate must chain to a system CA.
+
+Remote-access management (`GetRemoteAccess`, `SetRemoteAccess`,
+`CreateRemoteKey`, `RevokeRemoteKey`) is served by mirmir only over its local
+socket, so the Remote Access sheet always opens its own connection to This
+Mac (`RemoteAccessController`).
 
 Every connection checks `Health.protocol_version` against the client's
-protocol (`1`). A mismatch is the *Update needed* state.
+protocol (`2`). A mismatch is the *Update needed* state.
 
 ## Local server lifecycle
 
@@ -99,20 +109,16 @@ Later: an `SMAppService` launch agent so serving survives quitting the app.
 | Chat: Thinking toggle, JSON mode | — | `reasoning` mode and response format on `GenerateRequest` |
 | Logs for an attached server | — | log stream RPC |
 | Pause for an attached server | — | shutdown RPC (Control scope) |
-| Remote instances | — | TLS listener, keys, scopes (product doc, steps 5–7) |
 
 ## mirmir issues found while testing the app
 
-- **Two memory sources.** `Telemetry` reports the Metal working-set budget
-  (`Metal unified memory`, 55.7 GB on a 64 GB M3 Max); `TelemetryHistory`
-  samples host RAM through `sysinfo` (`macOS unified system memory`, 68.7 GB).
-  The app labels each value with its `memory_source`. The server should report
-  one source, or both explicitly.
-- **Residency through a symlinked cache.** With `hf-hub` reached through a
-  symlink, `ListLocalModels` lists a restored model as `available` under the
-  symlink path while `ListActiveModels` reports it under the resolved path. The
-  app treats `ListActiveModels` as authoritative and matches resolved paths.
-  The server should canonicalize the paths it compares.
+- **Two memory sources** (fixed in protocol 2). `Telemetry` reported the Metal
+  working set and `TelemetryHistory` host RAM under one free-form label. Now
+  `host_memory` and `accelerator_memory` are separate, with a typed
+  `AcceleratorMemoryPool`; the app decodes them into `MemoryPool`.
+- **Residency through a symlinked cache** (fixed in mirmir 0.6.0).
+  `ListLocalModels` now reports canonical paths, the ones `ListActiveModels`
+  returns.
 
 ## Build
 

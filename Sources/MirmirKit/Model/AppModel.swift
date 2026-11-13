@@ -34,14 +34,20 @@ public final class AppModel {
     public let supervisor: ServerSupervisor
     public let chat: ChatController
     let paths: SocketPaths
+    let credentials: any CredentialStore
     let instanceFile = JSONFile<[InstanceRecord]>(name: "instances.json")
     var sessionTask: Task<Void, Never>?
     var probeTask: Task<Void, Never>?
     var refreshModelsSoon = false
     var lastStartError: String?
 
-    public init(paths: SocketPaths = SocketPaths(), supervisor: ServerSupervisor = ServerSupervisor()) {
+    public init(
+        paths: SocketPaths = SocketPaths(),
+        supervisor: ServerSupervisor = ServerSupervisor(),
+        credentials: any CredentialStore = Credentials.platformDefault
+    ) {
         self.paths = paths
+        self.credentials = credentials
         self.supervisor = supervisor
         self.chat = ChatController()
         var stored = instanceFile.load() ?? []
@@ -73,7 +79,17 @@ public final class AppModel {
         connectCurrent()
     }
 
-    public func add(_ record: InstanceRecord) {
+    /// Saves an instance; a remote server's API key goes to the credential
+    /// store, never to `instances.json`.
+    public func add(_ record: InstanceRecord, key: String? = nil) {
+        if let key {
+            do {
+                try credentials.setKey(key, for: record.id)
+            } catch {
+                notice = error.localizedDescription
+                return
+            }
+        }
         instances.append(record)
         persistInstances()
         summaries[record.id] = .checking
@@ -83,6 +99,7 @@ public final class AppModel {
     public func remove(instance id: UUID) {
         guard id != InstanceRecord.thisMacID else { return }
         instances.removeAll { $0.id == id }
+        credentials.removeKey(for: id)
         summaries[id] = nil
         persistInstances()
         if currentInstanceID == id { select(instance: InstanceRecord.thisMacID) }

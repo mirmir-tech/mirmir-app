@@ -9,14 +9,8 @@ extension AppModel {
     func session(for instance: InstanceRecord) async {
         var startedAt: Date?
         while !Task.isCancelled {
-            guard let socket = paths.socket(for: instance.target) else {
-                if case .remote(let endpoint) = instance.target {
-                    phase = .offline(.remoteUnavailable(address: endpoint.address))
-                }
-                return
-            }
             do {
-                let connection = try await RuntimeConnection.connect(socket: socket)
+                let connection = try await open(instance)
                 guard !Task.isCancelled else { connection.close(); return }
                 startedAt = nil
                 phase = .connected(connection)
@@ -24,7 +18,7 @@ extension AppModel {
                 await runConnected(connection, instance: instance)
                 connection.close()
                 if Task.isCancelled { return }
-                phase = .offline(.noServer(socket: socket))
+                phase = .offline(offlineError(for: instance))
             } catch {
                 if Task.isCancelled { return }
                 if shouldStartServer(for: instance, after: error, startedAt: startedAt) {

@@ -13,7 +13,8 @@ why and for the protocol gaps that are still open.
 
 - macOS 15 or later
 - Swift 6 toolchain (Xcode 16 or later)
-- `mirmir` 0.5.5 or later on `PATH`, or bundled with `--helper`
+- `mirmir` 0.6.0 or later on `PATH` (protocol 2), or bundled with `--helper`
+  for local testing
 - `protoc`, only to regenerate the gRPC client
 
 ## Build and run
@@ -40,8 +41,17 @@ versions.
 
 ## Status
 
-First version: menu bar panel, Overview, Models (inspector, load/unload,
-generation defaults, Hugging Face download), Chat with streaming and
-reasoning, Instances for local sockets, Sessions, and Logs for the server the
-app starts. Remote instances are stored and shown but cannot connect until
-mirmir ships its TLS listener and API keys.
+0.6.0: menu bar panel, Overview, Models (inspector, load/unload, generation
+defaults, Hugging Face download), Chat with streaming and reasoning,
+Instances, Sessions, and Logs for the server the app starts.
+
+Remote servers connect over TLS with a scoped API key kept in the Keychain.
+Add Server shows the server's certificate fingerprint before sending the key
+and pins it on first use; CA-issued certificates are verified against the
+system roots instead. This Mac's Remote Access sheet turns its listener on,
+creates and revokes keys, and lists recent clients. See mirmir's
+[remote access guide](https://github.com/mirmir-tech/mirmir/blob/main/docs/remote-access.md).
+
+`MirmirKit` also builds and tests on Linux, without the SwiftUI app target.
+
+Releases: [docs/release.md](docs/release.md).

@@ -121,11 +121,3 @@ extension InstanceStatus {
         if case .offline = self { true } else { false }
     }
 }
-
-extension AppModel {
-    func address(of record: InstanceRecord) -> String {
-        if case .remote(let endpoint) = record.target { return "grpcs://\(endpoint.address)" }
-        let socket = SocketPaths().socket(for: record.target) ?? ""
-        return socket.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-    }
-}

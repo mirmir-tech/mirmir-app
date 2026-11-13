@@ -14,17 +14,8 @@ extension AppModel {
     }
 
     func probe(_ record: InstanceRecord) async {
-        guard let socket = paths.socket(for: record.target) else {
-            if case .remote(let endpoint) = record.target {
-                summaries[record.id] = InstanceSummary(
-                    status: InstanceStatus(error: .remoteUnavailable(address: endpoint.address)),
-                    telemetry: nil, loadedModels: []
-                )
-            }
-            return
-        }
         do {
-            let connection = try await RuntimeConnection.connect(socket: socket)
+            let connection = try await open(record)
             defer { connection.close() }
             async let snapshot = connection.telemetry()
             async let selectors = connection.activeSelectors()

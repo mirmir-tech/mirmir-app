@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-version="${MIRMIR_APP_VERSION:-0.1.0}"
+version="${MIRMIR_APP_VERSION:-0.6.0}"
 build="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 
 swift build -c "$configuration" --product Mirmir
