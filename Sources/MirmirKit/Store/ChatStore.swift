@@ -104,3 +104,13 @@ private struct Lenient<Value: Decodable>: Decodable {
         value = try? Value(from: decoder)
     }
 }
+
+/// Why the latest chats are not on disk. The conversations stay in memory
+/// and are saved again on the next change, on a retry, and before quitting.
+public struct ChatSaveFailure: Hashable, Sendable {
+    public let reason: String
+
+    public var message: String {
+        "Chats could not be saved: \(reason). They are kept in memory and saved again when the storage accepts writes."
+    }
+}

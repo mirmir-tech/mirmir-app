@@ -48,7 +48,11 @@ struct ConversationList: View {
             .frame(height: 44)
             Divider()
             if let issue = chat.loadIssue {
-                ChatLoadIssueBanner(issue: issue) { model.chat.dismissLoadIssue() }
+                ChatLoadIssueBanner(message: issue.message, action: issue.isPersistent ? nil : ("Dismiss", { model.chat.dismissLoadIssue() }))
+                Divider()
+            }
+            if let failure = chat.saveFailure {
+                ChatLoadIssueBanner(message: failure.message, action: ("Retry", { model.chat.retrySaving() }))
                 Divider()
             }
             List(selection: $chat.selectedID) {
@@ -76,22 +80,23 @@ struct ConversationList: View {
 
 /// Saved chats that did not load as written: where the original went, or
 /// that this session is not saved.
+/// A warning above the chat list about saved chats, with one action.
 struct ChatLoadIssueBanner: View {
-    let issue: ChatLoadIssue
-    let dismiss: () -> Void
+    let message: String
+    let action: (title: String, run: () -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label {
-                Text(issue.message).foregroundStyle(Palette.ink)
+                Text(message).foregroundStyle(Palette.ink)
             } icon: {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.warning)
             }
                 .font(.system(size: 11))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            if !issue.isPersistent {
-                Button("Dismiss", action: dismiss).controlSize(.small)
+            if let action {
+                Button(action.title, action: action.run).controlSize(.small)
             }
         }
         .padding(.horizontal, 16)

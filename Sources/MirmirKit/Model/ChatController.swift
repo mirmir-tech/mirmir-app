@@ -16,6 +16,11 @@ public final class ChatController {
     let store: ChatStore?
     /// Why the saved chats did not load as written; shown above the list.
     public internal(set) var loadIssue: ChatLoadIssue?
+    /// Why the latest save failed; nil once a save succeeds.
+    public internal(set) var saveFailure: ChatSaveFailure?
+    /// Numbers saves, so only the newest one's outcome is reported.
+    @ObservationIgnored var saveGeneration = 0
+    @ObservationIgnored var retryTask: Task<Void, Never>?
     /// Stored images a request needed but could not read, shown as
     /// unavailable on their messages. Read again on every send.
     public internal(set) var unreadableImages: Set<UUID> = []
@@ -187,11 +192,12 @@ public final class ChatController {
     }
 
     /// Call when the app terminates, before the connection closes: stops the
-    /// streaming reply as Stop does and returns once every save queued so
-    /// far, that one included, is on disk.
-    public func terminate() {
+    /// streaming reply as Stop does and saves every chat before returning.
+    /// Returns why the chats are not on disk, if they are not.
+    @discardableResult
+    public func terminate() -> ChatSaveFailure? {
         stop()
-        flushSaves()
+        return saveNow()
     }
 
     private func receive(_ event: GenerationEvent, reply: UUID) {

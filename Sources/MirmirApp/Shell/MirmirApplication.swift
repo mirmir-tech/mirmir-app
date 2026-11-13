@@ -71,6 +71,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
     }
 
+    /// Chats that cannot be saved are not lost silently: the user can try
+    /// again, quit anyway or keep the app open.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        while let failure = model.chat.saveNow() {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Chats could not be saved"
+            alert.informativeText = "\(failure.reason)\n\nQuitting now loses the changes made since the last successful save."
+            alert.addButton(withTitle: "Try Again")
+            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Cancel")
+            switch alert.runModal() {
+            case .alertFirstButtonReturn: continue
+            case .alertSecondButtonReturn: return .terminateNow
+            default: return .terminateCancel
+            }
+        }
+        return .terminateNow
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         model.shutdown()
     }
