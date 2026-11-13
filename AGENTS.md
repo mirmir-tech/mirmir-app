@@ -2,7 +2,8 @@
 
 This repository owns the native macOS application: a SwiftUI client of
 mirmir's `Runtime` gRPC service with a menu bar panel, a main window and
-instance management. It contains no inference engine. Read
+instance management. It bundles mirmir as a helper process
+(`scripts/xcode-helper.sh`) but its code never links the engine. Read
 `docs/architecture.md` before changing layers or the transport.
 
 ## Boundaries
@@ -33,7 +34,9 @@ instance management. It contains no inference engine. Read
   leave system grey backgrounds next to palette surfaces: use
   `paletteBackground` on lists, tables and forms.
 - Keep Swift files focused; split before a file passes about 250 lines.
-- `swift build` and `swift test` must stay warning-free.
+- `swift build`, `swift test` and the `Mirmir` scheme of `Mirmir.xcodeproj`
+  must stay warning-free. The app is built only by the Xcode project; never
+  add a runnable SwiftPM product for it.
 - Do not commit or push unless the user asks.
 
 ## Running against a test server

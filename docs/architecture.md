@@ -6,8 +6,10 @@ Product decisions: <https://claude.ai/artifact/KQwehDZuHXFEjDX3qzxqZy>
 ## Decision: a gRPC client that supervises `mirmir`, not a libmir wrapper
 
 The app is a SwiftUI client of mirmir's private `Runtime` gRPC service
-(`Proto/mirmir.proto`). It contains no inference engine. For the local
-instance it attaches to a running `mirmir` server or starts one.
+(`Proto/mirmir.proto`). It bundles mirmir (with libmir and MLX) as a separate
+helper process, `Contents/Helpers/mirmir`, but its own code never links the
+engine. For the local instance it attaches to a running `mirmir` server or
+starts the bundled one.
 
 Embedding `libmir` behind a C ABI was rejected:
 
@@ -122,6 +124,6 @@ Later: an `SMAppService` launch agent so serving survives quitting the app.
 
 ## Build
 
-SwiftPM, macOS 15+ (grpc-swift 2 requires it). `swift build` for development;
-`scripts/bundle.sh` assembles `Mirmir.app` with `Info.plist` and, if provided,
+SwiftPM for `MirmirKit`/`MirmirRPC`, `Mirmir.xcodeproj` for the app bundle. The kit needs macOS 15+ (grpc-swift 2); the app needs macOS 27 on Apple silicon, the target of the MLX it bundles. `swift test` for the kit;
+`scripts/bundle.sh` builds `Mirmir.app` with `xcodebuild`, embedding, in Debug or when given,
 the `mirmir` helper binary.

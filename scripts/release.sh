@@ -1,51 +1,173 @@
 #!/usr/bin/env bash
-# Signs, packages, notarizes and staples Mirmir for distribution. macOS only.
+# Builds, signs, notarizes and packages Mirmir for distribution. macOS only.
 #
-#   MIRMIR_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" \
-#   MIRMIR_NOTARY_PROFILE=mirmir-notary \
-#   scripts/release.sh
+#   scripts/release.sh [--skip-notarize]
+#
+#   MIRMIR_APP_VERSION     marketing version (default 0.6.0)
+#   MIRMIR_SIGN_IDENTITY   code signing identity (default "Developer ID Application")
+#   MIRMIR_TEAM_ID         team of that identity (default 5AH2Q9L8R2)
+#   MIRMIR_NOTARY_PROFILE  notarytool keychain profile (default mirmir-notary)
 #
 # Create the notarytool profile once:
 #   xcrun notarytool store-credentials mirmir-notary \
-#       --apple-id you@example.com --team-id TEAMID --password <app-specific>
+#       --apple-id you@example.com --team-id 5AH2Q9L8R2 --password <app-specific>
 #
-# Produces build/Mirmir-<version>.dmg and build/Mirmir-macOS.dmg (the same
-# file under the stable name the website links to through
-# releases/latest/download/). The app uses `mirmir` from PATH; no helper is
-# bundled, because mirmir links libmlx.dylib dynamically.
+# --skip-notarize builds and signs everything but does not notarize: for a
+# look at the disk image on this Mac. Other Macs refuse such an image.
+#
+# Produces build/release/Mirmir-<version>.dmg and build/release/Mirmir-macOS.dmg
+# (the same file under the stable name the website links to through
+# releases/latest/download/). The app contains the mirmir runtime and MLX
+# (see scripts/xcode-helper.sh); it needs nothing installed.
+#
+# Laying out the disk image window drives Finder through AppleScript: the
+# first run asks to let the terminal control Finder.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
+notarize=true
+for argument in "$@"; do
+    case "$argument" in
+        --skip-notarize) notarize=false ;;
+        *) echo "unknown argument: $argument" >&2; exit 2 ;;
+    esac
+done
+
 version="${MIRMIR_APP_VERSION:-0.6.0}"
-identity="${MIRMIR_SIGN_IDENTITY:?set MIRMIR_SIGN_IDENTITY to a Developer ID Application identity}"
-profile="${MIRMIR_NOTARY_PROFILE:?set MIRMIR_NOTARY_PROFILE to a notarytool keychain profile}"
+build_number="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+identity="${MIRMIR_SIGN_IDENTITY:-Developer ID Application}"
+team="${MIRMIR_TEAM_ID:-5AH2Q9L8R2}"
+profile="${MIRMIR_NOTARY_PROFILE:-mirmir-notary}"
+volume="Mirmir"
+out="build/release"
+work="$out/work"
 
-swift test
-MIRMIR_APP_VERSION="$version" scripts/bundle.sh --release
+step() { printf '\n==> %s\n' "$*"; }
 
-app="build/Mirmir.app"
-sign() { codesign --force --options runtime --timestamp --sign "$identity" "$@"; }
-if [[ -f "$app/Contents/Helpers/mirmir" ]]; then sign "$app/Contents/Helpers/mirmir"; fi
-sign "$app/Contents/MacOS/Mirmir"
-sign "$app"
-codesign --verify --strict --deep --verbose=2 "$app"
+if $notarize && ! xcrun notarytool history --keychain-profile "$profile" >/dev/null 2>&1; then
+    echo "error: no notarytool profile '$profile'; create it (see the header) or pass --skip-notarize" >&2
+    exit 1
+fi
 
-dmg="build/Mirmir-$version.dmg"
-staging="$(mktemp -d)"
-trap 'rm -rf "$staging"' EXIT
-cp -R "$app" "$staging/"
+rm -rf "$work" "$out/Mirmir.app"
+mkdir -p "$work"
+
+step "Testing MirmirKit"
+swift test --quiet
+
+step "Building Mirmir $version ($build_number), signed by $identity"
+xcodebuild -project Mirmir.xcodeproj -scheme Mirmir -configuration Release \
+    -destination "generic/platform=macOS" -derivedDataPath "$out/DerivedData" -quiet \
+    MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build_number" \
+    CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$identity" DEVELOPMENT_TEAM="$team" \
+    ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS="--timestamp" \
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+    build
+app="$out/Mirmir.app"
+ditto "$out/DerivedData/Build/Products/Release/Mirmir.app" "$app"
+
+step "Checking the signature"
+codesign --verify --deep --strict --verbose=2 "$app"
+details="$(codesign -dvv "$app" 2>&1)"
+grep -q "Authority=Developer ID Application" <<<"$details" || { echo "error: not signed with a Developer ID" >&2; exit 1; }
+grep -q "flags=.*runtime" <<<"$details" || { echo "error: hardened runtime is off" >&2; exit 1; }
+if codesign -d --entitlements - "$app" 2>/dev/null | grep -q "get-task-allow"; then
+    echo "error: the app carries get-task-allow, which notarization refuses" >&2
+    exit 1
+fi
+
+step "Checking the bundled runtime"
+"$app/Contents/Helpers/mirmir" --version
+while IFS= read -r -d '' file; do
+    if file -b "$file" | grep -q "Mach-O" && otool -L "$file" | tail -n +2 | grep -q "/Users/"; then
+        echo "error: $file links a library on this machine:" >&2
+        otool -L "$file" | grep "/Users/" >&2
+        exit 1
+    fi
+done < <(find "$app/Contents" -type f -print0)
+lipo -archs "$app/Contents/MacOS/Mirmir" | grep -qx arm64 || { echo "error: the app is not arm64 only" >&2; exit 1; }
+
+step "Drawing the disk image background"
+swift scripts/dmg/background.swift "$work/background.png" 1 "$version"
+swift scripts/dmg/background.swift "$work/background@2x.png" 2 "$version"
+tiffutil -cathidpicheck "$work/background.png" "$work/background@2x.png" -out "$work/background.tiff" >/dev/null
+
+step "Assembling the disk image"
+staging="$work/staging"
+mkdir -p "$staging/.background"
+ditto "$app" "$staging/Mirmir.app"
 ln -s /Applications "$staging/Applications"
+cp "$work/background.tiff" "$staging/.background/background.tiff"
+
+if [[ -d "/Volumes/$volume" ]]; then hdiutil detach "/Volumes/$volume" -force -quiet || true; fi
+size_mb=$(( $(du -sm "$staging" | cut -f1) + 40 ))
+hdiutil create -quiet -volname "$volume" -srcfolder "$staging" -fs HFS+ -format UDRW -size "${size_mb}m" -ov "$work/rw.dmg"
+device="$(hdiutil attach "$work/rw.dmg" -readwrite -noverify -noautoopen 2>/dev/null | awk '/Apple_HFS/ {print $1}')"
+mount="/Volumes/$volume"
+
+# Finder's bounds are the whole window; make the content area exactly the
+# background's 660×400 pt.
+window_height="$(swift - <<'SWIFT'
+import AppKit
+let frame = NSWindow.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 660, height: 400), styleMask: [.titled, .closable, .miniaturizable])
+print(Int(frame.height.rounded()))
+SWIFT
+)"
+osascript <<APPLESCRIPT
+tell application "Finder"
+    tell disk "$volume"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {200, 120, 860, $((120 + window_height))}
+        set options to the icon view options of container window
+        set arrangement of options to not arranged
+        set icon size of options to 128
+        set text size of options to 13
+        set label position of options to bottom
+        set background picture of options to file ".background:background.tiff"
+        set extension hidden of item "Mirmir.app" to true
+        set position of item "Mirmir.app" of container window to {170, 190}
+        set position of item "Applications" of container window to {490, 190}
+        close
+        open
+        update without registering applications
+        delay 2
+        close
+    end tell
+end tell
+APPLESCRIPT
+# The volume icon: added to the mounted image (hdiutil -srcfolder drops it)
+# and flagged after Finder has written its layout, which can clear the flag.
+cp "$app/Contents/Resources/AppIcon.icns" "$mount/.VolumeIcon.icns"
+SetFile -c icnC "$mount/.VolumeIcon.icns"
+SetFile -a C "$mount"
+chmod -Rf go-w "$mount" 2>/dev/null || true
+sync
+for attempt in 1 2 3 4 5; do
+    hdiutil detach "$device" -quiet && break
+    sleep 2
+done
+
+dmg="$out/Mirmir-$version.dmg"
 rm -f "$dmg"
-hdiutil create -volname "Mirmir $version" -srcfolder "$staging" -format UDZO "$dmg"
+hdiutil convert -quiet "$work/rw.dmg" -format UDZO -imagekey zlib-level=9 -o "$dmg"
 codesign --force --timestamp --sign "$identity" "$dmg"
 
-xcrun notarytool submit "$dmg" --keychain-profile "$profile" --wait
-xcrun stapler staple "$dmg"
-xcrun stapler validate "$dmg"
-spctl --assess --type open --context context:primary-signature --verbose "$dmg"
+if $notarize; then
+    step "Notarizing (this waits for Apple)"
+    xcrun notarytool submit "$dmg" --keychain-profile "$profile" --wait
+    xcrun stapler staple "$dmg"
+    xcrun stapler validate "$dmg"
+    spctl --assess --type open --context context:primary-signature --verbose "$dmg"
+else
+    step "Skipping notarization: other Macs will refuse this image"
+fi
 
-cp "$dmg" build/Mirmir-macOS.dmg
-shasum -a 256 "$dmg" build/Mirmir-macOS.dmg
-echo "notarized $dmg; attach both files to the mirmir-app v$version GitHub release"
+cp "$dmg" "$out/Mirmir-macOS.dmg"
+rm -rf "$work"
+shasum -a 256 "$dmg"
+echo "built $dmg$($notarize && echo ", notarized and stapled" || echo ", not notarized")"

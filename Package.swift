@@ -5,7 +5,6 @@ let package = Package(
     name: "MirmirApp",
     platforms: [.macOS(.v15)],
     products: [
-        .executable(name: "Mirmir", targets: ["MirmirApp"]),
         .library(name: "MirmirKit", targets: ["MirmirKit"]),
     ],
     dependencies: [
@@ -42,10 +41,10 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ]
         ),
-        .executableTarget(
-            name: "MirmirApp",
-            dependencies: ["MirmirKit"]
-        ),
+        // The app itself (Sources/MirmirApp) is built only by
+        // Mirmir.xcodeproj, as a real bundle with the embedded mirmir helper.
+        // A runnable SwiftPM product would let Xcode launch a bare executable
+        // without bundle or helper.
         .testTarget(
             name: "MirmirKitTests",
             dependencies: ["MirmirKit"]
