@@ -115,6 +115,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    /// Opening the running app again from Finder, Launchpad or `open` shows
+    /// the main window, recreating it when it was closed. Without this an
+    /// agent app has no window to bring back and nothing appears.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MainWindow.reopen()
+        return false
+    }
 }
 
 struct MirmirCommands: Commands {
