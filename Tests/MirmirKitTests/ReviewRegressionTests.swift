@@ -111,5 +111,7 @@ struct RemoteTestTests {
     @Test func keysAreComparedTrimmed() {
         #expect(RemoteCandidate(address: "box.local", key: " mmk_a ", pinned: nil)
             == RemoteCandidate(address: "box.local", key: "mmk_a", pinned: nil))
+        // A key pasted from a terminal ends with a newline.
+        #expect(RemoteCandidate(address: "box.local", key: "mmk_a\n", pinned: nil)?.key == "mmk_a")
     }
 }

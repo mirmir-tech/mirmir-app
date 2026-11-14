@@ -12,7 +12,9 @@ public struct RemoteCandidate: Hashable, Sendable {
         guard var endpoint = RemoteEndpoint(address: address) else { return nil }
         endpoint.pinnedFingerprint = pinned
         self.endpoint = endpoint
-        self.key = key.trimmingCharacters(in: .whitespaces)
+        // A key pasted from a terminal often ends with a newline, which the
+        // authorization header would carry.
+        self.key = key.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
