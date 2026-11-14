@@ -49,8 +49,13 @@ public final class RemoteAccessController {
         await refresh()
     }
 
+    /// Revokes a key and lists the keys again; a failure stays shown, as a
+    /// refresh would clear it.
     public func revoke(_ key: RemoteKey) async {
-        _ = await withLocalServer { connection throws(ConnectionError) in try await connection.revokeRemoteKey(id: key.id) }
+        let revoked = await withLocalServer { connection throws(ConnectionError) in
+            try await connection.revokeRemoteKey(id: key.id)
+        }
+        guard revoked != nil else { return }
         await refresh()
     }
 

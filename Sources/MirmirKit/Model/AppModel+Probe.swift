@@ -22,14 +22,21 @@ extension AppModel {
             let summary = InstanceSummary(
                 status: .online(connection.health), telemetry: try await snapshot, loadedModels: try await selectors
             )
-            guard record.id != currentInstanceID else { return }
+            guard shouldPublishProbe(of: record) else { return }
             summaries[record.id] = summary
         } catch {
-            guard record.id != currentInstanceID else { return }
+            guard shouldPublishProbe(of: record) else { return }
             summaries[record.id] = InstanceSummary(
                 status: InstanceStatus(error: ConnectionError.wrap(error)), telemetry: nil, loadedModels: []
             )
         }
+    }
+
+    /// A probe outlives the record it started with: its result is dropped
+    /// when the probe was cancelled, the instance became current, or it was
+    /// removed or edited meanwhile.
+    private func shouldPublishProbe(of record: InstanceRecord) -> Bool {
+        !Task.isCancelled && record.id != currentInstanceID && instances.contains(record)
     }
 
     public func summary(for record: InstanceRecord) -> InstanceSummary {
