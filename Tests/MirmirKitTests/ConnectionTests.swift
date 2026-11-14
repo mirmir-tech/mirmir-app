@@ -1,5 +1,8 @@
 import Foundation
 import Testing
+#if canImport(Security)
+import Security
+#endif
 @testable import MirmirKit
 
 @Suite("Socket resolution and compatibility")
@@ -111,6 +114,17 @@ struct RemoteTests {
         store.removeKey(for: first)
         #expect(store.key(for: first) == nil)
     }
+
+    #if canImport(Security)
+    /// The login Keychain ignores accessibility classes, so a new item
+    /// claims none; the sandbox scopes it to the app.
+    @Test func keychainItemsClaimNoDataProtectionClass() {
+        let item = KeychainCredentials.newItem(UUID(), data: Data("mmk_a".utf8))
+        #expect(item[kSecAttrAccessible as String] == nil)
+        #expect(item[kSecUseDataProtectionKeychain as String] == nil)
+        #expect(item[kSecAttrService as String] as? String == KeychainCredentials.service)
+    }
+    #endif
 
     @Test func rejectedKeysAndChangedCertificatesAreNamed() {
         let pinned = CertificateFingerprint(der: [1])

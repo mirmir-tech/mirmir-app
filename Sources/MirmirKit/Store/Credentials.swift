@@ -53,7 +53,7 @@ public struct KeychainCredentials: CredentialStore {
     public init() {}
 
     public func key(for instance: UUID) -> String? {
-        var query = base(instance)
+        var query = Self.base(instance)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -66,22 +66,32 @@ public struct KeychainCredentials: CredentialStore {
     public func setKey(_ key: String, for instance: UUID) throws {
         let data = Data(key.utf8)
         let update = [kSecValueData as String: data] as CFDictionary
-        var status = SecItemUpdate(base(instance) as CFDictionary, update)
+        var status = SecItemUpdate(Self.base(instance) as CFDictionary, update)
         if status == errSecItemNotFound {
-            var item = base(instance)
-            item[kSecValueData as String] = data
-            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            item[kSecAttrLabel as String] = "Mirmir remote API key"
-            status = SecItemAdd(item as CFDictionary, nil)
+            status = SecItemAdd(Self.newItem(instance, data: data) as CFDictionary, nil)
         }
         guard status == errSecSuccess else { throw KeychainError(status: status) }
     }
 
     public func removeKey(for instance: UUID) {
-        SecItemDelete(base(instance) as CFDictionary)
+        SecItemDelete(Self.base(instance) as CFDictionary)
     }
 
-    private func base(_ instance: UUID) -> [String: Any] {
+    /// A new key's item in the file-based login Keychain, which the sandbox
+    /// gives each app its own access to. It sets no `kSecAttrAccessible`:
+    /// that class (and its device-only variants) applies only in the
+    /// data-protection Keychain, which needs a keychain access group
+    /// entitlement and provisioning profile that unsigned builds and
+    /// `swift test` lack. The login Keychain ignores it, so it would claim a
+    /// protection the item does not have.
+    static func newItem(_ instance: UUID, data: Data) -> [String: Any] {
+        var item = base(instance)
+        item[kSecValueData as String] = data
+        item[kSecAttrLabel as String] = "Mirmir remote API key"
+        return item
+    }
+
+    private static func base(_ instance: UUID) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Self.service,
