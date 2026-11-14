@@ -75,27 +75,39 @@ public final class ModelFolders {
     }
 
     /// Grants a folder the user chose in an open panel; the grant is already
-    /// active for this launch and the bookmark renews it on the next.
+    /// active for this launch and the bookmark renews it on the next. Throws
+    /// when the grant cannot be saved: it is then not kept, so the folders
+    /// shown are the ones that return after a relaunch.
     @discardableResult
     public func add(_ url: URL) throws -> ModelFolder {
-        if let existing = folders.first(where: { $0.path == url.path }) {
+        var kept = folders
+        let existing = folders.first { $0.path == url.path }
+        if let existing {
             guard failures[existing.id] != nil else { return existing }
             // Granted again after it could not be opened: a fresh bookmark.
-            remove(existing.id)
+            kept.removeAll { $0.id == existing.id }
         }
         let folder = ModelFolder(id: UUID(), path: url.path, kind: ModelFolder.kind(of: url), bookmark: try Self.bookmark(url))
+        try file.save(kept + [folder])
+        if let existing { forget(existing.id) }
         accessed[folder.id] = url
-        folders.append(folder)
-        persist()
+        folders = kept + [folder]
         return folder
     }
 
-    public func remove(_ id: UUID) {
+    /// Removes a grant. Throws when the change cannot be saved; the folder
+    /// then stays granted, as it would after a relaunch.
+    public func remove(_ id: UUID) throws {
         guard folders.contains(where: { $0.id == id }) else { return }
+        let kept = folders.filter { $0.id != id }
+        try file.save(kept)
+        forget(id)
+        folders = kept
+    }
+
+    private func forget(_ id: UUID) {
         if let url = accessed.removeValue(forKey: id) { Self.stopAccess(url) }
         failures[id] = nil
-        folders.removeAll { $0.id == id }
-        persist()
     }
 
     /// Opens every folder's grant and reconciles moved folders and stale
@@ -116,7 +128,9 @@ public final class ModelFolders {
                 return folder
             }
         }
-        if changed { persist() }
+        // A reconciliation that cannot be saved is made again on the next
+        // launch; this launch already uses the folders' current locations.
+        if changed { try? file.save(folders) }
     }
 
     /// The folder's current location with its access started, and a renewed
@@ -150,9 +164,5 @@ public final class ModelFolders {
         #if os(macOS)
         url.stopAccessingSecurityScopedResource()
         #endif
-    }
-
-    private func persist() {
-        try? file.save(folders)
     }
 }

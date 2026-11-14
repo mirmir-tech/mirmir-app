@@ -19,7 +19,12 @@ extension AppModel {
 
     public func removeModelFolder(_ id: UUID) {
         let before = modelFolders.huggingFaceCache
-        modelFolders.remove(id)
+        do {
+            try modelFolders.remove(id)
+        } catch {
+            report(error, "Removing the folder failed")
+            return
+        }
         if modelFolders.huggingFaceCache != before { restartServer() }
     }
 

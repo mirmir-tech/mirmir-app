@@ -38,9 +38,27 @@ struct ModelFolderTests {
 
         let reloaded = ModelFolders(file: file)
         #expect(reloaded.folders.map(\.path) == [home.path])
-        reloaded.remove(added.id)
+        try reloaded.remove(added.id)
         #expect(reloaded.serverEnvironment.isEmpty)
         #expect(ModelFolders(file: file).folders.isEmpty)
+    }
+
+    /// A grant or removal that cannot be saved is not shown as made: the
+    /// folders in memory stay the ones a relaunch restores.
+    @Test func anUnsavedChangeIsReportedAndNotKept() throws {
+        let home = try scratch(), other = try scratch(), store = try scratch()
+        defer { [home, other, store].forEach { try? FileManager.default.removeItem(at: $0) } }
+        let file = JSONFile<[ModelFolder]>(name: "model-folders.json", directory: store.appendingPathComponent("folders"))
+        let folders = ModelFolders(file: file)
+        let added = try folders.add(home)
+
+        // A file where the store's directory should be: every save fails.
+        try FileManager.default.removeItem(at: store.appendingPathComponent("folders"))
+        try Data().write(to: store.appendingPathComponent("folders"))
+        #expect(throws: (any Error).self) { try folders.add(other) }
+        #expect(folders.folders.map(\.id) == [added.id])
+        #expect(throws: (any Error).self) { try folders.remove(added.id) }
+        #expect(folders.folders.map(\.id) == [added.id])
     }
 
     // Following a move and reporting a missing folder are what Darwin's

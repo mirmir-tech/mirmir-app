@@ -53,6 +53,8 @@ struct SettingsView: View {
         .paletteBackground(Palette.canvas)
         .frame(width: 560)
         .padding(.vertical, 8)
+        // A grant that could not be saved is reported here, where it was made.
+        .overlay(alignment: .bottom) { NoticeBanner() }
     }
 
     private func addFolder() {
