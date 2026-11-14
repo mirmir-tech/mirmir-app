@@ -75,8 +75,17 @@ sidebar or menu bar switches every screen.
   (`CredentialStore`), never in `instances.json`. The certificate is pinned by
   its SHA-256 fingerprint, read without trusting it or sending the key and
   confirmed by the user in Add Server (`RemoteTLS`, NIOSSL's verification
-  callback). A different certificate later is *certificate changed*. Without a
-  pin the certificate must chain to a system CA.
+  callback). A different certificate later is *certificate changed*; Edit
+  Server reads and trusts the new one under the same identity. Without a pin
+  the certificate must chain to a system CA. `PinningTests` performs the
+  handshake on loopback: right pin, wrong pin, no pin.
+
+A saved server's identity (`InstanceRecord.id`) owns its chats and images.
+Edit Server changes its name, address, key and pin in place. A removed server
+with chats is kept in `removed-instances.json`; adding a server at the same
+host and port again takes its identity back, and with it the chats. Model
+paths reported by a remote server are matched as written, never resolved
+against this Mac's file system.
 
 Remote-access management (`GetRemoteAccess`, `SetRemoteAccess`,
 `CreateRemoteKey`, `RevokeRemoteKey`) is served by mirmir only over its local
@@ -134,8 +143,18 @@ re-attached app still shows the log.
 
 An owned server is stopped with `SIGTERM` (graceful shutdown, 10 s before
 `SIGKILL`) on *Pause server* and on quit, including a quit caused by
-`SIGTERM`/`SIGINT` to the app. A server that outlived a crashed app is
-attached on the next launch and not stopped.
+`SIGTERM`/`SIGINT` to the app. While the first launch writes the
+configuration the server counts as starting (`ServerOwnership.configuring`).
+A server that outlived a crashed app is recovered on the next launch when the
+process at the other end of the container socket (`LOCAL_PEERPID`) runs this
+bundle's helper (`proc_pidpath`); it is then paused, restarted and stopped on
+quit like one the app started. One that cannot be verified, such as another
+copy's, is attached and left alone.
+
+Chats are read only after older copies of the app have quit and flushed
+theirs. A deleted chat's images are removed once a save without the chat is
+on disk. When `chats.json` cannot be read the session never writes it, and
+quitting with chats of that session asks first.
 
 The gRPC client sets the HTTP/2 `:authority` to `localhost` for Unix sockets.
 grpc-swift's default is the socket path, which is not a valid authority, and

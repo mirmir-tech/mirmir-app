@@ -61,7 +61,9 @@ so a remote server is driven exactly like the bundled one.
 - **Remote servers.** Calls go over HTTP/2 with TLS and carry an API key with
   the `use` or `control` scope, kept in the login Keychain. The server's
   self-signed certificate is shown before the key is sent and pinned on first
-  use; a CA-issued certificate is checked against the system roots.
+  use; a CA-issued certificate is checked against the system roots. Edit
+  Server changes a server's address, key or trusted certificate and keeps
+  its chats.
 - **One server at a time.** Every screen and the menu bar show the current
   server; switching changes all of them, including the chat list.
 
