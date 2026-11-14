@@ -39,7 +39,8 @@ struct InstancesView: View {
         let statuses = model.instances.map { model.summary(for: $0).status }
         let online = statuses.filter { if case .online = $0 { true } else { false } }.count
         let update = statuses.filter { if case .updateNeeded = $0 { true } else { false } }.count
-        var text = "\(model.instances.count) instances · \(online) online"
+        let count = model.instances.count
+        var text = "\(count) \(count == 1 ? "instance" : "instances") · \(online) online"
         if update > 0 { text += " · \(update) need an update" }
         return text
     }

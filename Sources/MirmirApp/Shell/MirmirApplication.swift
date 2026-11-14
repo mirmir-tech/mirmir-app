@@ -141,6 +141,7 @@ struct MirmirCommands: Commands {
             Button("Chat") { show(.chat) }.keyboardShortcut("4")
             Button("Sessions") { show(.sessions) }.keyboardShortcut("5")
             Button("Logs") { show(.logs) }.keyboardShortcut("6")
+            Button("Configuration") { show(.configuration) }.keyboardShortcut("7")
         }
     }
 

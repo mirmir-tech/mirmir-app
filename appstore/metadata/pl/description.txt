@@ -1,0 +1,25 @@
+MiRMiR uruchamia duże modele językowe na Twoim Macu. Lokalnie, natywnie i bez wysyłania Twoich pytań w podróż dookoła świata.
+
+To niewielka aplikacja w pasku menu z porządnym silnikiem pod spodem: środowiskiem MiRMiR napisanym w Ruście, na Metalu i MLX. Pobierasz model, ładujesz go i rozmawiasz. A aplikacja w tym czasie pilnuje, co robi sprzęt, żebyś nie musiał zgadywać, dlaczego obudziły się wentylatory.
+
+CO POTRAFI
+
+• Modele: lista modeli na Twoim Macu wraz z informacją, czy obsługują narzędzia, rozumowanie i obrazy. Szacunek zużycia pamięci przed załadowaniem i pobieranie nowych modeli z Hugging Face.
+• Czat: odpowiedzi na żywo z tokiem rozumowania modelu oraz liczbą tokenów, tempem i czasem do pierwszego tokenu przy każdej odpowiedzi. Modele wizyjne przyjmują obrazy.
+• Przegląd: przepustowość dekodowania i prefill, pamięć i ostatnie sesje z pięciu minut, godziny albo doby.
+• Pasek menu: bieżące tempo generowania widać w pasku menu, a załadowany model, pamięć i skróty są o jedno kliknięcie dalej.
+• Lokalne API: wbudowany serwer udostępnia API HTTP zgodne z OpenAI pod adresem 127.0.0.1, więc edytor, skrypty i inne narzędzia mogą korzystać z tych samych modeli.
+• Więcej niż jedna maszyna: łączysz się z serwerami MiRMiR na innych Macach albo na stacji z kartą NVIDIA, przez TLS i z kluczami API o ograniczonym zakresie, i przełączasz się między nimi z paska bocznego. Możesz też włączyć Dostęp zdalny i pozwolić im korzystać z tego Maca.
+
+PRYWATNOŚĆ OD POCZĄTKU
+
+Twoje pytania, czaty i modele zostają na Twoim Macu albo na serwerach, które sam dodasz. Nie ma konta, analityki ani śledzenia. Aplikacja łączy się z internetem tylko po to, żeby pobrać wskazane przez Ciebie modele i rozmawiać z dodanymi przez Ciebie serwerami.
+
+WARTO WIEDZIEĆ
+
+• Wymaga Maca z procesorem Apple i systemu macOS 27 lub nowszego.
+• Modele językowe są duże. Małe działają na każdym Macu z procesorem Apple, większe potrzebują więcej pamięci i miejsca na dysku. MiRMiR pokazuje szacowane zużycie pamięci, zanim cokolwiek załaduje.
+• Aplikacja działa w piaskownicy macOS i czyta tylko te foldery z modelami, do których dasz jej dostęp w Ustawieniach.
+• MiRMiR jest projektem open source (Apache 2.0) i wciąż jest młody. Nie każdy model został już przetestowany, a obsługa nowych przychodzi z aktualizacjami.
+
+Pytania, błędy i pomysły: mirmir.tech/contact.

@@ -1,7 +1,7 @@
 import Foundation
 
 public enum SidebarSection: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case overview, chat, models, instances, sessions, logs
+    case overview, chat, models, instances, sessions, logs, configuration
 
     public var id: String { rawValue }
 
@@ -13,6 +13,7 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Hashable, Sendab
         case .instances: "Instances"
         case .sessions: "Sessions"
         case .logs: "Logs"
+        case .configuration: "Configuration"
         }
     }
 }

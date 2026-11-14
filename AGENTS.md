@@ -33,6 +33,12 @@ instance management. It bundles mirmir as a helper process
 - Colors come only from `Palette` (the website tokens, light and dark). Do not
   leave system grey backgrounds next to palette surfaces: use
   `paletteBackground` on lists, tables and forms.
+- The window toolbar holds a screen's filter and the actions that add or open
+  something (Add Server, Download, Inspector), beside the search field. Never
+  add a toolbar button for what the screen already does on its own, such as
+  reloading after a connection change: every `ToolbarItem` is drawn as its own
+  glass capsule, and a lone icon between the filter and the search field reads
+  as an orphan. (Load Model left Overview's toolbar for the same reason.)
 - Keep Swift files focused; split before a file passes about 250 lines.
 - `swift build`, `swift test` and the `Mirmir` scheme of `Mirmir.xcodeproj`
   must stay warning-free. The app is built only by the Xcode project; never

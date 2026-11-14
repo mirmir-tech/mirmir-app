@@ -23,6 +23,11 @@ MiRMiR server you use: this Mac or a GPU box across the room.
 - **Chat.** Streaming replies with the model's reasoning, tokens, decode rate
   and time to first token per reply. Conversations belong to the server they
   were started on.
+- **Configuration.** The current server's settings, as the TUI shows them:
+  the Hugging Face token and HTTP API key, then the HTTP API, Remote Access,
+  scheduling, K/V cache, memory and vision settings, each with where its
+  value comes from and whether it needs a restart. Search, show only
+  overrides, reset one to mirmir's default, restart the bundled server.
 - **Servers.** Switch between this Mac and remote servers from the sidebar;
   add a server over TLS with a scoped API key, or share this Mac with
   **Remote Access**.

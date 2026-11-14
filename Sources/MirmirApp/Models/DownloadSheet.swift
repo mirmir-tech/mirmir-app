@@ -58,9 +58,10 @@ struct DownloadSheet: View {
         } else if let transfer = model.transfers[result.id] {
             ProgressView(value: transfer.fraction ?? 0).frame(width: 80)
         } else {
+            // The Hub marks a repository gated for everyone; whether this
+            // server's token was granted access shows only when it downloads.
             Button("Download") { model.pull(result.id) }
-                .disabled(result.gated)
-                .help(result.gated ? "Gated repository: accept its terms on Hugging Face and set a token in mirmir." : "")
+                .help(result.gated ? "Gated repository: accept its terms on Hugging Face and add your token in Configuration." : "")
         }
     }
 
