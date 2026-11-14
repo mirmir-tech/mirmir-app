@@ -33,8 +33,21 @@ extension ChatController {
         drafts[conversation, default: ComposerDraft()].text = text
     }
 
+    /// Takes the image out of the composer; one still converting is
+    /// dropped when it finishes.
     public func removeDraftImage(for conversation: UUID) {
         drafts[conversation]?.image = nil
+    }
+
+    /// Why a message to `conversation` must not be sent: it would carry an
+    /// image (`attaching` one now, or one from the history) to a listed
+    /// model without image input. A model the server does not list is not
+    /// judged; the server answers for it.
+    func imageRefusal(for conversation: Conversation, attaching: Bool) -> RequestError? {
+        guard attaching || conversation.sendsStoredImage,
+              let listed = model?.model(selector: conversation.model), !listed.imageInput
+        else { return nil }
+        return .imageNotSupported(model: listed.displayName, origin: attaching ? .composer : .history)
     }
 
     /// Attaches an image to `conversation`'s composer. `load` reads it and

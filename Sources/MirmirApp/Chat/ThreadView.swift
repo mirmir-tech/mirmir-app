@@ -151,6 +151,16 @@ struct Composer: View {
                         .disabled(!(model.model(selector: conversation.model)?.imageInput ?? false))
                         .help("Attach an image for vision models. It stays with the conversation; a new one replaces it.")
                 }
+                if draft.image != nil {
+                    Button { model.chat.removeDraftImage(for: conversation.id) } label: {
+                        Label(draft.isPreparingImage ? "Preparing image" : "Image", systemImage: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Remove the image from this message")
+                    .accessibilityLabel("Remove image")
+                }
                 Spacer()
                 if let tokens = conversation.contextTokens {
                     Text("\(Format.grouped(tokens)) tokens").font(.mono(11)).foregroundStyle(.secondary)

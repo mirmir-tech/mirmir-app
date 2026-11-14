@@ -117,6 +117,10 @@ public final class ChatController {
             model?.notice = "Choose a loaded model before sending."
             return false
         }
+        if let refusal = imageRefusal(for: conversation, attaching: image != nil) {
+            model?.notice = refusal.localizedDescription
+            return false
+        }
         var attached: MessageImage?
         if let image {
             guard image.count <= MessageLimits.imageBytes else {
