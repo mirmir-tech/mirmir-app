@@ -30,6 +30,9 @@ public final class ChatController {
     /// Images of deleted chats, removed from the attachment store only once
     /// a save without those chats is on disk.
     @ObservationIgnored var discardedImages: Set<UUID> = []
+    /// Whether a session that must not save over unreadable history changed
+    /// its chats; quitting then loses those changes.
+    public internal(set) var hasUnsavedChanges = false
     /// Serial, so saves land in order; encoding every chat stays off the
     /// main actor.
     let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)

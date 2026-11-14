@@ -136,8 +136,12 @@ struct ChatHistoryTests {
             Issue.record("load issue \(String(describing: model.chat.loadIssue))")
             return
         }
+        #expect(!model.chat.hasUnsavedChanges)
         model.chat.newConversation(model: "m")
         model.chat.flushSaves()
+        // Quitting asks first: nothing of this session is on disk.
+        #expect(model.chat.hasUnsavedChanges)
+        #expect(model.chat.saveNow() == nil)
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: store.file.url.path)
         #expect(try Data(contentsOf: store.file.url) == original)
     }

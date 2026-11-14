@@ -88,6 +88,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             default: return .terminateCancel
             }
         }
+        // Saved chats that could not be read are never written over, so this
+        // session's chats exist only in memory.
+        if model.chat.hasUnsavedChanges {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "This session's chats are not saved"
+            alert.informativeText = (model.chat.loadIssue?.message ?? "Saved chats could not be read.")
+                + "\n\nQuitting now loses the chats and messages of this session."
+            alert.addButton(withTitle: "Quit Anyway")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() != .alertFirstButtonReturn { return .terminateCancel }
+        }
         return .terminateNow
     }
 

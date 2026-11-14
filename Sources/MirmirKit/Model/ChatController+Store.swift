@@ -19,7 +19,11 @@ extension ChatController {
     /// Queues a save of every chat. Its outcome updates `saveFailure`; a
     /// failure keeps the chats in memory and retries them later.
     func persist() {
-        guard let store = savingStore else { return }
+        guard let store = savingStore else {
+            // Not previews: a session that leaves unreadable history alone.
+            if store != nil { hasUnsavedChanges = true }
+            return
+        }
         saveGeneration += 1
         let generation = saveGeneration
         let snapshot = conversations
@@ -31,7 +35,8 @@ extension ChatController {
     }
 
     /// Saves every chat now, after the saves already queued, and returns
-    /// why they are not on disk, if they are not.
+    /// why they are not on disk, if they are not. A session that does not
+    /// save (`hasUnsavedChanges`) returns nil: retrying cannot help it.
     @discardableResult
     public func saveNow() -> ChatSaveFailure? {
         guard let store = savingStore else { return nil }
