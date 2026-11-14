@@ -46,8 +46,8 @@ MiRMiR server you use: this Mac or a GPU box across the room.
 </table>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://mirmir.tech/assets/screenshots/mac-instances-0.6.0-dark-cc29c370.webp">
-  <img alt="Instances with this Mac's server, its loaded models and Remote Access" src="https://mirmir.tech/assets/screenshots/mac-instances-0.6.0-light-9a936665.webp">
+  <source media="(prefers-color-scheme: dark)" srcset="https://mirmir.tech/assets/screenshots/mac-instances-0.6.0-dark-80e7d310.webp">
+  <img alt="Instances with This Mac and a remote CUDA server, each with its loaded model and memory" src="https://mirmir.tech/assets/screenshots/mac-instances-0.6.0-light-29fb1982.webp">
 </picture>
 
 ## How it works
@@ -80,7 +80,7 @@ protocol gaps that are still open.
 1. [Download MiRMiR for Mac](https://github.com/mirmir-tech/mirmir-app/releases/latest/download/Mirmir-macOS.dmg),
    open the disk image and drag Mirmir to Applications. It is signed and
    notarized and needs macOS 27 or later on Apple silicon.
-2. Start Mirmir. It includes the runtime (mirmir 0.6.0 and MLX) and runs its
+2. Start Mirmir. It includes the runtime (mirmir 0.6.1 and MLX) and runs its
    own server, separate from the CLI's. Its guide is at
    [docs.mirmir.tech](https://docs.mirmir.tech/getting-started/mac-app.html).
 
