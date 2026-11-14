@@ -27,6 +27,9 @@ public final class ChatController {
     /// Images of a session whose chats are not saved: previews, and a
     /// session that must leave an unreadable `chats.json` untouched.
     @ObservationIgnored var sessionImages: [UUID: Data] = [:]
+    /// Images of deleted chats, removed from the attachment store only once
+    /// a save without those chats is on disk.
+    @ObservationIgnored var discardedImages: Set<UUID> = []
     /// Serial, so saves land in order; encoding every chat stays off the
     /// main actor.
     let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)
@@ -68,31 +71,6 @@ public final class ChatController {
 
     /// The conversation whose reply is streaming, if any.
     public var generatingConversation: UUID? { active?.conversation }
-
-    @discardableResult
-    public func newConversation(model selector: String? = nil) -> UUID {
-        let selector = selector ?? model?.primaryModel.map { model?.servingSelector(for: $0) ?? $0.selector } ?? ""
-        guard let instance = model?.currentInstanceID else { return UUID() }
-        let conversation = Conversation(instanceID: instance, model: selector)
-        conversations.insert(conversation, at: 0)
-        selectedID = conversation.id
-        persist()
-        return conversation.id
-    }
-
-    /// Deletes a conversation; a reply it is still generating is stopped
-    /// first, wherever the selection is. Other conversations' replies go on.
-    public func delete(_ id: UUID) {
-        if active?.conversation == id { stop() }
-        if let conversation = conversations.first(where: { $0.id == id }) {
-            conversation.storedImages.forEach { sessionImages[$0] = nil }
-            if let attachments = savingStore?.attachments { conversation.storedImages.forEach(attachments.remove) }
-        }
-        drafts[id] = nil
-        conversations.removeAll { $0.id == id }
-        if selectedID == id { selectedID = visibleConversations.first?.id }
-        persist()
-    }
 
     public func setModel(_ selector: String, for id: UUID) {
         update(id) { $0.model = selector }

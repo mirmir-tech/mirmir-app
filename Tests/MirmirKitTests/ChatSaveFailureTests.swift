@@ -67,4 +67,32 @@ struct ChatSaveFailureTests {
         #expect(model.chat.saveFailure == nil)
         #expect(ChatStore(directory: directory).load().conversations.count == 2)
     }
+
+    /// A deleted chat's images go only after the save without it is on
+    /// disk: after a failed save the chat comes back with them.
+    @Test func aDeletedChatKeepsItsImagesUntilTheSaveWithoutItSucceeds() throws {
+        let directory = try ChatHistoryTests.scratch()
+        defer {
+            try? allowWrites(directory)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let store = ChatStore(directory: directory)
+        let image = try store.attachments.save(Data([1, 2, 3]))
+        let chat = Conversation(instanceID: InstanceRecord.thisMacID, title: "Look", model: "m", messages: [
+            ChatMessage(body: .user(text: "Look", image: .stored(image))),
+        ])
+        try store.file.save([chat])
+        let model = ChatHistoryTests.model(directory)
+        guard try refuseWrites(directory) else { return }
+
+        model.chat.delete(chat.id)
+        #expect(model.chat.saveNow() != nil)
+        #expect(try store.attachments.load(image) == Data([1, 2, 3]), "the saved chat still shows its image")
+        #expect(store.load().conversations.map(\.id) == [chat.id])
+
+        try allowWrites(directory)
+        #expect(model.chat.saveNow() == nil)
+        #expect(store.load().conversations.isEmpty)
+        #expect(throws: (any Error).self) { try store.attachments.load(image) }
+    }
 }

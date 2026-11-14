@@ -19,13 +19,14 @@ extension ChatController {
     /// Queues a save of every chat. Its outcome updates `saveFailure`; a
     /// failure keeps the chats in memory and retries them later.
     func persist() {
-        guard let file = savingStore?.file else { return }
+        guard let store = savingStore else { return }
         saveGeneration += 1
         let generation = saveGeneration
         let snapshot = conversations
+        let discarded = discardedImages
         saver.async { [weak self] in
-            let result = Result { try file.save(snapshot) }
-            Task { @MainActor in self?.saved(result, generation: generation) }
+            let result = Self.write(snapshot, to: store, discarding: discarded)
+            Task { @MainActor in self?.saved(result, generation: generation, discarded: discarded) }
         }
     }
 
@@ -33,12 +34,25 @@ extension ChatController {
     /// why they are not on disk, if they are not.
     @discardableResult
     public func saveNow() -> ChatSaveFailure? {
-        guard let file = savingStore?.file else { return nil }
+        guard let store = savingStore else { return nil }
         saveGeneration += 1
         let snapshot = conversations
-        let result = saver.sync { Result { try file.save(snapshot) } }
-        saved(result, generation: saveGeneration)
+        let discarded = discardedImages
+        let result = saver.sync { Self.write(snapshot, to: store, discarding: discarded) }
+        saved(result, generation: saveGeneration, discarded: discarded)
         return saveFailure
+    }
+
+    /// Writes the chats, then removes the images of deleted ones: only once
+    /// no saved chat refers to them.
+    private nonisolated static func write(
+        _ snapshot: [Conversation], to store: ChatStore, discarding discarded: Set<UUID>
+    ) -> Result<Void, any Error> {
+        let result = Result { try store.file.save(snapshot) }
+        if case .success = result {
+            discarded.subtracting(snapshot.flatMap(\.storedImages)).forEach(store.attachments.remove)
+        }
+        return result
     }
 
     /// Saves again after a failure, as the banner's Retry does.
@@ -49,7 +63,8 @@ extension ChatController {
     /// Delay before a failed save is tried again on its own.
     static let saveRetryDelay: Duration = .seconds(10)
 
-    private func saved(_ result: Result<Void, any Error>, generation: Int) {
+    private func saved(_ result: Result<Void, any Error>, generation: Int, discarded: Set<UUID>) {
+        if case .success = result { discardedImages.subtract(discarded) }
         guard generation == saveGeneration else { return }
         retryTask?.cancel()
         switch result {
