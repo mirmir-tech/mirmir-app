@@ -33,6 +33,11 @@ instance management. It bundles mirmir as a helper process
 - Colors come only from `Palette` (the website tokens, light and dark). Do not
   leave system grey backgrounds next to palette surfaces: use
   `paletteBackground` on lists, tables and forms.
+- Xcode runs the whole app, AppDelegate included, to render any `#Preview`
+  of this target. `Launch.isPreview` keeps such a process from quitting the
+  running Mirmir (it would be the newest copy), starting a server and adding a
+  menu bar item that answers no clicks. Put every new launch-time side effect
+  behind it.
 - The window toolbar holds a screen's filter and the actions that add or open
   something (Add Server, Download, Inspector), beside the search field. Never
   add a toolbar button for what the screen already does on its own, such as
