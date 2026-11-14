@@ -8,7 +8,7 @@
 #   Contents/Frameworks/libjaccl.dylib
 #
 # Install names are rewritten from the build machine's MLX prefix to @rpath,
-# and every piece is signed with the app's identity and hardened runtime
+# run paths outside the bundle are deleted, and every piece is signed with the app's identity and hardened runtime
 # (with a secure timestamp outside Debug), inside out, before Xcode signs
 # the app.
 #
@@ -92,9 +92,23 @@ framework="$frameworks/MLX.framework"
 # their sources. Touching them when nothing changed would break the app's seal
 # on incremental builds, where Xcode does not re-sign.
 stamp="$DERIVED_FILE_DIR/mirmir-runtime.sha256"
-digest="$(cat "$binary" "$mlx_lib/libmlx.dylib" "$mlx_lib/libjaccl.dylib" "$mlx_lib/mlx.metallib" "$app_root/Resources/MirmirHelper.entitlements" | shasum -a 256 | cut -d' ' -f1)"
+# The signing identity and timestamp mode are part of the stamp: a copy
+# signed for Debug or by another identity is embedded and signed again.
 identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 if [[ "${CONFIGURATION:-Debug}" == Debug ]]; then timestamp="--timestamp=none"; else timestamp="--timestamp"; fi
+digest="$( (cat "$binary" "$mlx_lib/libmlx.dylib" "$mlx_lib/libjaccl.dylib" "$mlx_lib/mlx.metallib" "$app_root/Resources/MirmirHelper.entitlements"; printf '%s\n%s\n' "$identity" "$timestamp") | shasum -a 256 | cut -d' ' -f1)"
+
+# The LC_RPATH entries of a Mach-O file, one per line.
+rpaths() { otool -l "$1" | awk '/cmd LC_RPATH/ { getline; getline; print $2 }'; }
+# Drops every run path that is not relative to the bundle (@executable_path,
+# @loader_path), such as the build machine's MLX prefix a linker added.
+strip_rpaths() {
+    local path
+    while IFS= read -r path; do
+        [[ -z "$path" || "$path" == @* ]] && continue
+        install_name_tool -delete_rpath "$path" "$1"
+    done < <(rpaths "$1")
+}
 
 if [[ ! -x "$helpers/mirmir" || ! -d "$framework" || "$(cat "$stamp" 2>/dev/null)" != "$digest" ]]; then
     echo "embedding mirmir and MLX $MLX_VERSION"
@@ -124,7 +138,10 @@ PLIST
     cp "$binary" "$helpers/mirmir"
     chmod u+w "$frameworks/libjaccl.dylib" "$framework/Versions/A/MLX" "$helpers/mirmir"
 
-    # From the build machine's MLX prefix to paths inside the bundle.
+    # From the build machine's MLX prefix to paths inside the bundle. Run
+    # paths into this machine are dropped first, so the shipped binaries
+    # name no build directory and search only the bundle.
+    for piece in "$frameworks/libjaccl.dylib" "$framework/Versions/A/MLX" "$helpers/mirmir"; do strip_rpaths "$piece"; done
     install_name_tool -id @rpath/libjaccl.dylib "$frameworks/libjaccl.dylib"
     install_name_tool -id @rpath/MLX.framework/Versions/A/MLX \
         -change "$mlx_lib/libjaccl.dylib" @rpath/libjaccl.dylib \
@@ -135,6 +152,13 @@ PLIST
         echo "error: an embedded binary still links $mlx_lib" >&2
         exit 1
     fi
+    for piece in "$frameworks/libjaccl.dylib" "$framework/Versions/A/MLX" "$helpers/mirmir"; do
+        if rpaths "$piece" | grep -qv '^@'; then
+            echo "error: $piece keeps a run path outside the bundle:" >&2
+            rpaths "$piece" | grep -v '^@' >&2
+            exit 1
+        fi
+    done
 
     # Inside out: the libraries, the framework, then the helper.
     sign() { codesign --force --sign "$identity" --options runtime "$timestamp" "$@"; }
