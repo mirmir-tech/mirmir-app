@@ -17,8 +17,12 @@ struct GenerationDefaultsForm: View {
         self.selector = selector
         self.saved = saved
         self.maxTokensLimit = maxTokensLimit
-        _draft = State(initialValue: saved)
+        _draft = State(initialValue: saved.boundingMaxTokens(by: maxTokensLimit))
     }
+
+    /// The draft as it is saved: Max tokens within the current limit, even
+    /// when the limit shrank after the value was chosen.
+    private var bounded: GenerationSettings { draft.boundingMaxTokens(by: maxTokensLimit) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -44,17 +48,20 @@ struct GenerationDefaultsForm: View {
                 Spacer()
                 Button("Save Defaults") {
                     saving = true
-                    let settings = draft
+                    let settings = bounded
+                    draft = settings
                     Task {
                         await model.updateSettings(selector, settings)
                         saving = false
                     }
                 }
-                .disabled(saving || draft == saved)
+                .disabled(saving || bounded == saved)
             }
         }
         // A save that the server applied comes back as the new saved value.
-        .onChange(of: saved) { _, newValue in draft = newValue }
+        .onChange(of: saved) { _, newValue in draft = newValue.boundingMaxTokens(by: maxTokensLimit) }
+        // A smaller context lowers the limit: the draft follows it at once.
+        .onChange(of: maxTokensLimit) { _, limit in draft = draft.boundingMaxTokens(by: limit) }
     }
 
     private func row<Control: View>(_ title: String, @ViewBuilder control: () -> Control) -> some View {

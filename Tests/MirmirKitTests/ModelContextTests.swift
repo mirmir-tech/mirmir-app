@@ -114,4 +114,12 @@ struct ModelContextCallTests {
         #expect(updated.map(\.context) == [ContextChoice.tokens(2_048).wire, nil])
         #expect(model.inspections["m"] != nil, "a save shows what the server saved")
     }
+
+    @Test func maxTokensFollowASmallerContext() {
+        let settings = GenerationSettings(maxTokens: 8_192, temperature: 0.7, topP: 0.9, topK: 40, repetitionPenalty: 1)
+        #expect(settings.boundingMaxTokens(by: 1_024).maxTokens == 1_024)
+        #expect(settings.boundingMaxTokens(by: 16_384).maxTokens == 8_192)
+        #expect(GenerationSettings(maxTokens: 0, temperature: 0, topP: 1, topK: 0, repetitionPenalty: 1)
+            .boundingMaxTokens(by: 1_024).maxTokens == 1)
+    }
 }

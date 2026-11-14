@@ -115,6 +115,13 @@ public struct GenerationSettings: Hashable, Sendable {
         self.topK = topK
         self.repetitionPenalty = repetitionPenalty
     }
+
+    /// These settings with Max tokens from 1 up to `limit`.
+    public func boundingMaxTokens(by limit: UInt64) -> GenerationSettings {
+        var bounded = self
+        bounded.maxTokens = min(max(maxTokens, 1), max(limit, 1))
+        return bounded
+    }
 }
 
 public struct ModelInspection: Hashable, Sendable {
