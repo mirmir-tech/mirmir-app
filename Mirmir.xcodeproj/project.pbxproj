@@ -258,6 +258,7 @@
 				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = tech.mirmir.app;
 				PRODUCT_NAME = Mirmir;
+				PROVISIONING_PROFILE_SPECIFIER = "$(MIRMIR_PROVISIONING_PROFILE)";
 			};
 			name = Release;
 		};

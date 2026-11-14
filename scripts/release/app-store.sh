@@ -54,13 +54,17 @@ mkdir -p "$out"
 step "Testing MirmirKit"
 swift test --quiet
 
+# The profile reaches only the Mirmir target, through its Release setting
+# PROVISIONING_PROFILE_SPECIFIER = $(MIRMIR_PROVISIONING_PROFILE): a setting
+# on the command line applies to every target, and the SwiftPM resource
+# bundles refuse a provisioning profile.
 step "Archiving Mirmir $version ($build_number) for the Mac App Store, signed by $signer"
 xcodebuild -project Mirmir.xcodeproj -scheme Mirmir -configuration Release \
     -destination "generic/platform=macOS" -derivedDataPath "$out/DerivedData-AppStore" -quiet \
     -archivePath "$archive" \
     MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build_number" \
     CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$signer" DEVELOPMENT_TEAM="$team" \
-    PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" \
+    MIRMIR_PROVISIONING_PROFILE="$profile_uuid" \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     archive
 app="$archive/Products/Applications/Mirmir.app"
@@ -69,6 +73,13 @@ step "Checking the app"
 codesign --verify --deep --strict --verbose=2 "$app"
 [[ -f "$app/Contents/embedded.provisionprofile" ]] || fail "the provisioning profile is not embedded"
 "$root/scripts/release/check-sandbox.sh" "$app"
+# App Store Connect refuses an app whose signature lacks the identifiers
+# from its profile.
+signed="$(codesign -d --entitlements - --xml "$app" 2>/dev/null | plutil -convert json -o - -)"
+grep -qF "\"com.apple.application-identifier\":\"$team.$bundle_id\"" <<<"$signed" \
+    || fail "the app is signed without com.apple.application-identifier $team.$bundle_id"
+grep -qF "\"com.apple.developer.team-identifier\":\"$team\"" <<<"$signed" \
+    || fail "the app is signed without com.apple.developer.team-identifier $team"
 # The helper inherits the app's sandbox, so it runs only as the app's child
 # (alone it traps); check the binary instead of running it.
 lipo -archs "$app/Contents/Helpers/mirmir" | grep -qx arm64 || { echo "error: the bundled mirmir is not arm64" >&2; exit 1; }
