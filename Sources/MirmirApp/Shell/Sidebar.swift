@@ -9,87 +9,35 @@ struct Sidebar: View {
         List(selection: $model.section) {
             Section("Mirmir") {
                 ForEach(SidebarSection.allCases) { section in
-                    Label(section.title, systemImage: section.symbol)
-                        .badge(badge(for: section))
-                        .tag(section)
-                }
-            }
-            Section("Connected to") {
-                ForEach(model.instances) { record in
-                    InstanceRow(record: record, current: record.id == model.currentInstanceID)
+                    // Icons follow the design, not the system accent: the text
+                    // colour, the accent for the current section. The system
+                    // tint depends on window activation and differs between
+                    // a key window, an inactive one and a rendered one.
+                    Label {
+                        Text(section.title)
+                    } icon: {
+                        Image(systemName: section.symbol)
+                            .foregroundStyle(section == model.section ? Palette.signal : Palette.ink)
+                    }
+                    .badge(badge(for: section))
+                    .tag(section)
                 }
             }
         }
         .listStyle(.sidebar)
         .paletteBackground(Palette.sidebar)
-        .safeAreaInset(edge: .bottom) { ServingFooter().padding(12) }
+        .safeAreaInset(edge: .bottom) {
+            ServerSwitcher().padding(10).background(Palette.sidebar)
+        }
     }
 
     private func badge(for section: SidebarSection) -> Int {
         switch section {
-        case .chat: model.chat.conversations.count
+        case .chat: model.chat.visibleConversations.count
         case .models: model.models.count
         case .instances: model.instances.count
         case .sessions: model.activeOperations.count
         case .overview, .logs: 0
-        }
-    }
-}
-
-private struct InstanceRow: View {
-    @Environment(AppModel.self) private var model
-    let record: InstanceRecord
-    let current: Bool
-
-    var body: some View {
-        Button { model.select(instance: record.id) } label: {
-            HStack(spacing: 8) {
-                StatusDot(color: model.summary(for: record).status.color)
-                Text(record.name).fontWeight(current ? .semibold : .regular)
-                Spacer()
-                Text(record.target.kind.label.lowercased()).font(.system(size: 11)).foregroundStyle(Palette.muted)
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 1)
-    }
-}
-
-/// Bottom of the sidebar: is this instance serving, where, on what device.
-struct ServingFooter: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                StatusDot(color: color)
-                Text(title).font(.system(size: 12, weight: .semibold))
-            }
-            if let connection = model.connection {
-                Text("mirmir \(connection.health.serverVersion)").font(.mono(11)).foregroundStyle(Palette.muted)
-            }
-            if let device = model.telemetry?.deviceName, !device.isEmpty {
-                Text(device).font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(2)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.sidebar)
-    }
-
-    private var title: String {
-        switch model.phase {
-        case .connected: "Serving"
-        case .connecting: "Connecting"
-        case .startingServer: "Starting"
-        case .offline: "Offline"
-        }
-    }
-
-    private var color: Color {
-        switch model.phase {
-        case .connected: Palette.success
-        case .connecting, .startingServer: Palette.warning
-        case .offline: Palette.muted
         }
     }
 }

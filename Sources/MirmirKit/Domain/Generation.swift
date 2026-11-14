@@ -17,14 +17,26 @@ public struct ChatTurn: Hashable, Sendable {
     }
 }
 
+/// The one image a request carries, at the user turn it was attached to.
+public struct TurnImage: Hashable, Sendable {
+    public let data: Data
+    /// Index into the request's turns; it must be a user turn.
+    public let turn: Int
+
+    public init(data: Data, turn: Int) {
+        self.data = data
+        self.turn = turn
+    }
+}
+
 public struct GenerationRequest: Sendable {
     public let model: String
     public let turns: [ChatTurn]
     public let maxTokens: UInt64?
     public let temperature: Float?
-    public let image: Data?
+    public let image: TurnImage?
 
-    public init(model: String, turns: [ChatTurn], maxTokens: UInt64? = nil, temperature: Float? = nil, image: Data? = nil) {
+    public init(model: String, turns: [ChatTurn], maxTokens: UInt64? = nil, temperature: Float? = nil, image: TurnImage? = nil) {
         self.model = model
         self.turns = turns
         self.maxTokens = maxTokens

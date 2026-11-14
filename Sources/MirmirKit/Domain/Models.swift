@@ -57,10 +57,22 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
 
     public var id: String { selector }
 
-    /// The repository name without its owner, e.g. `Qwen3.6-35B-A3B-mxfp4`.
+    /// The repository name without its owner, e.g. `Qwen3.6-35B-A3B-mxfp4`;
+    /// for a path, the model directory (or its Hugging Face repository).
     public var displayName: String {
-        let source = repoID.isEmpty ? selector : repoID
-        return source.split(separator: "/").last.map(String.init) ?? source
+        if repoID.isEmpty { return Conversation.modelName(selector) }
+        return repoID.split(separator: "/").last.map(String.init) ?? repoID
+    }
+
+    /// A model the server serves but does not list locally, such as a
+    /// checkpoint loaded from a path outside its model directories. Only the
+    /// selector is known.
+    static func unlisted(selector: String) -> LocalModel {
+        LocalModel(
+            selector: selector, repoID: "", commit: "", path: selector.hasPrefix("/") ? selector : "",
+            state: .loaded, loadability: .loadable, modelClass: "", encoding: "", container: "",
+            sizeBytes: 0, features: [], imageInput: false, managed: false, recentRank: nil
+        )
     }
 
     public var owner: String? {

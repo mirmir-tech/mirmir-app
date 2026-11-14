@@ -14,31 +14,29 @@ extension AppModel {
     }
 
     func probe(_ record: InstanceRecord) async {
-        guard let socket = paths.socket(for: record.target) else {
-            if case .remote(let endpoint) = record.target {
-                summaries[record.id] = InstanceSummary(
-                    status: InstanceStatus(error: .remoteUnavailable(address: endpoint.address)),
-                    telemetry: nil, loadedModels: []
-                )
-            }
-            return
-        }
         do {
-            let connection = try await RuntimeConnection.connect(socket: socket)
+            let connection = try await open(record)
             defer { connection.close() }
             async let snapshot = connection.telemetry()
             async let selectors = connection.activeSelectors()
             let summary = InstanceSummary(
                 status: .online(connection.health), telemetry: try await snapshot, loadedModels: try await selectors
             )
-            guard record.id != currentInstanceID else { return }
+            guard shouldPublishProbe(of: record) else { return }
             summaries[record.id] = summary
         } catch {
-            guard record.id != currentInstanceID else { return }
+            guard shouldPublishProbe(of: record) else { return }
             summaries[record.id] = InstanceSummary(
                 status: InstanceStatus(error: ConnectionError.wrap(error)), telemetry: nil, loadedModels: []
             )
         }
+    }
+
+    /// A probe outlives the record it started with: its result is dropped
+    /// when the probe was cancelled, the instance became current, or it was
+    /// removed or edited meanwhile.
+    private func shouldPublishProbe(of record: InstanceRecord) -> Bool {
+        !Task.isCancelled && record.id != currentInstanceID && instances.contains(record)
     }
 
     public func summary(for record: InstanceRecord) -> InstanceSummary {

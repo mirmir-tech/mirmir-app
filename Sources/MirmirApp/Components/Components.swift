@@ -56,16 +56,15 @@ struct Metric: View {
     var size: CGFloat = 13
 
     var body: some View {
-        (Text(value).font(.mono(size, weight: .semibold))
-            + Text(" \(unit)").font(.mono(size * 0.55 < 10 ? 11 : size * 0.5)).foregroundStyle(Palette.muted))
-            .monospacedDigit()
+        let number = Text(value).font(.mono(size, weight: .semibold))
+        let suffix = Text(unit).font(.mono(size * 0.55 < 10 ? 11 : size * 0.5)).foregroundStyle(Palette.muted)
+        return Text("\(number) \(suffix)").monospacedDigit()
     }
 }
 
 /// Stacked horizontal bar for memory, as in the menu bar panel.
 struct StackedBar: View {
-    struct Segment: Identifiable {
-        let id = UUID()
+    struct Segment {
         let fraction: Double
         let color: Color
     }
@@ -74,13 +73,20 @@ struct StackedBar: View {
     var height: CGFloat = 6
 
     var body: some View {
+        // Each fraction is relative to the track. When they add up to more
+        // than the track (a model over its memory budget) scale them down
+        // together, so the bar stays inside its card and keeps proportions.
+        let fractions = segments.map { min(max($0.fraction, 0), 1) }
+        let total = fractions.reduce(0, +)
+        let scale = total > 1 ? 1 / total : 1
         GeometryReader { proxy in
             HStack(spacing: 0) {
-                ForEach(segments) { segment in
-                    segment.color.frame(width: proxy.size.width * min(max(segment.fraction, 0), 1))
+                ForEach(segments.indices, id: \.self) { index in
+                    segments[index].color.frame(width: proxy.size.width * fractions[index] * scale)
                 }
                 Spacer(minLength: 0)
             }
+            .frame(width: proxy.size.width, alignment: .leading)
             .background(Palette.raised)
             .clipShape(Capsule())
         }
@@ -95,7 +101,10 @@ struct EmptyState: View {
     var symbol = "tray"
 
     var body: some View {
+        // Fill the space offered, so the container's background reaches its
+        // edges instead of stopping at the text.
         ContentUnavailableView(title, systemImage: symbol, description: Text(message))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

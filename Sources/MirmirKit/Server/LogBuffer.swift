@@ -19,7 +19,7 @@ public final class LogBuffer {
     public private(set) var lines: [LogLine] = []
     private var nextID = 0
     private var partial: [LogStream: String] = [:]
-    public let capacity: Int
+    public nonisolated let capacity: Int
 
     public init(capacity: Int = 4000) {
         self.capacity = capacity
@@ -36,6 +36,17 @@ public final class LogBuffer {
         if lines.count > capacity { lines.removeFirst(lines.count - capacity) }
     }
 
+    /// Appends complete lines that are already free of ANSI codes, in one
+    /// observable change.
+    public func append(lines batch: [String], stream: LogStream) {
+        let now = Date()
+        lines.append(contentsOf: batch.map { text in
+            defer { nextID += 1 }
+            return LogLine(id: nextID, date: now, stream: stream, text: text)
+        })
+        if lines.count > capacity { lines.removeFirst(lines.count - capacity) }
+    }
+
     public func note(_ text: String) {
         append(text + "\n", stream: .supervisor)
     }
@@ -45,7 +56,8 @@ public final class LogBuffer {
         partial.removeAll()
     }
 
-    static func stripANSI(_ text: String) -> String {
-        text.replacingOccurrences(of: "\u{1B}\\[[0-9;]*[A-Za-z]", with: "", options: .regularExpression)
+    nonisolated static func stripANSI(_ text: String) -> String {
+        guard text.contains("\u{1B}") else { return text }
+        return text.replacingOccurrences(of: "\u{1B}\\[[0-9;]*[A-Za-z]", with: "", options: .regularExpression)
     }
 }

@@ -65,9 +65,26 @@ struct DecodingTests {
     }
 
     @Test func memoryReadingNeedsBothValues() {
-        #expect(MemoryReading(total: 100, available: nil, source: "host") == nil)
-        let reading = MemoryReading(total: 100, available: 40, source: "host")
+        #expect(MemoryReading(total: 100, available: nil, pool: .host) == nil)
+        let reading = MemoryReading(total: 100, available: 40, pool: .host)
         #expect(reading?.usedBytes == 60)
+    }
+
+    @Test func memoryPoolsAreTypedAndAcceleratorLeads() {
+        var wire = Mirmir_V1_TelemetrySnapshot()
+        wire.hostMemory.totalBytes = 128
+        wire.hostMemory.availableBytes = 64
+        let hostOnly = TelemetrySnapshot(wire)
+        #expect(hostOnly.memory?.pool == .host)
+        #expect(hostOnly.acceleratorMemory == nil)
+        wire.acceleratorMemory.pool = .cudaUnified
+        wire.acceleratorMemory.totalBytes = 120
+        wire.acceleratorMemory.availableBytes = 20
+        let both = TelemetrySnapshot(wire)
+        #expect(both.memory?.pool == .cudaUnified)
+        #expect(both.hostMemory?.totalBytes == 128)
+        wire.acceleratorMemory.pool = .unspecified
+        #expect(TelemetrySnapshot(wire).acceleratorMemory == nil)
     }
 
     @Test func historyIsSortedByTime() {

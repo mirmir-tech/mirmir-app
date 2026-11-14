@@ -5,12 +5,31 @@ extension AppModel {
     /// a checkpoint reached through a symlinked cache can be listed as
     /// available under one path while it is active under its resolved path.
     public var loadedModels: [LocalModel] {
-        models.filter { $0.state == .loaded || activeSelector(for: $0) != nil }
+        let listed = models.filter { $0.state == .loaded || activeSelector(for: $0) != nil }
+        let served = Set(listed.map { servingSelector(for: $0) })
+        return listed + activeSelectors.filter { !served.contains($0) }.map(LocalModel.unlisted)
     }
 
-    /// The model the menu bar and chat default to.
+    /// The model the menu bar, Overview and chat default to: the loaded model
+    /// that generated most recently, else the one the server used last. The
+    /// first loaded model may be an embedding or reranking model.
     public var primaryModel: LocalModel? {
-        loadedModels.first
+        let loaded = loadedModels
+        let lastGenerated = activities.values
+            .filter { $0.kind == .generate }
+            .max { $0.updatedAt < $1.updatedAt }?.target
+        if let lastGenerated, let match = loaded.first(where: { servingSelector(for: $0) == lastGenerated || $0.selector == lastGenerated }) {
+            return match
+        }
+        return loaded.min { ($0.recentRank ?? .max) < ($1.recentRank ?? .max) }
+    }
+
+    /// What an activity acts on, for display: a known model by its name
+    /// rather than its selector, which is often a path in the user's home.
+    public func displayTarget(of activity: Activity) -> String {
+        if activity.target.isEmpty { return activity.kind.label }
+        let loaded = loadedModels.first { servingSelector(for: $0) == activity.target || $0.selector == activity.target }
+        return (loaded ?? model(selector: activity.target))?.displayName ?? activity.target
     }
 
     /// The state to show: loaded when the server serves it, else its own.
@@ -30,12 +49,34 @@ extension AppModel {
     }
 
     func activeSelector(for local: LocalModel) -> String? {
-        if activeSelectors.contains(local.selector) { return local.selector }
-        let resolved = Self.resolved(local.path.isEmpty ? local.selector : local.path)
-        return activeSelectors.first { Self.resolved($0) == resolved }
+        servingSelectors[local.selector]
     }
 
-    static func resolved(_ path: String) -> String {
+    /// Pairs each listed model with the active selector serving it. Paths
+    /// are compared through their symlinks only on a server on this Mac
+    /// (`resolvingPaths`), as only those paths are this Mac's; that touches
+    /// the file system, so call it off the main actor. A remote server's
+    /// paths are compared as written.
+    nonisolated static func servingSelectors(
+        models: [LocalModel], active: [String], resolvingPaths: Bool
+    ) -> [String: String] {
+        guard !active.isEmpty else { return [:] }
+        let exact = Set(active)
+        func resolved(_ path: String) -> String { resolvingPaths ? Self.resolved(path) : path }
+        let resolvedActive = active.map { (resolved($0), $0) }
+        var serving: [String: String] = [:]
+        for local in models {
+            if exact.contains(local.selector) {
+                serving[local.selector] = local.selector
+                continue
+            }
+            let target = resolved(local.path.isEmpty ? local.selector : local.path)
+            if let match = resolvedActive.first(where: { $0.0 == target }) { serving[local.selector] = match.1 }
+        }
+        return serving
+    }
+
+    nonisolated static func resolved(_ path: String) -> String {
         guard path.hasPrefix("/") else { return path }
         return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
@@ -46,12 +87,12 @@ extension AppModel {
         Task {
             do {
                 try await connection.load(selector: selector) { progress in
-                    await self.setLoad(selector, progress)
+                    await self.setLoad(selector, progress, from: connection)
                 }
             } catch {
-                notice = "Loading \(selector) failed: \(error.localizedDescription)"
+                report(error, "Loading \(selector) failed", from: connection)
             }
-            loads[selector] = nil
+            if isCurrent(connection) { loads[selector] = nil }
             try? await refreshModels(connection)
         }
     }
@@ -62,9 +103,9 @@ extension AppModel {
             do {
                 _ = try await connection.unload(selector: selector)
             } catch {
-                notice = "Unloading \(selector) failed: \(error.localizedDescription)"
+                report(error, "Unloading \(selector) failed", from: connection)
             }
-            inspections[selector] = nil
+            if isCurrent(connection) { inspections[selector] = nil }
             try? await refreshModels(connection)
         }
     }
@@ -72,9 +113,11 @@ extension AppModel {
     public func inspect(_ selector: String) async {
         guard let connection else { return }
         do {
-            inspections[selector] = try await connection.inspect(selector: selector)
+            let inspection = try await connection.inspect(selector: selector)
+            if isCurrent(connection) { inspections[selector] = inspection }
         } catch {
-            notice = "Inspecting \(selector) failed: \(error.localizedDescription)"
+            guard !isPreview else { return }
+            report(error, "Inspecting \(selector) failed", from: connection)
         }
     }
 
@@ -82,9 +125,10 @@ extension AppModel {
         guard let connection else { return }
         do {
             try await connection.updateSettings(selector: selector, settings: settings)
-            inspections[selector] = try await connection.inspect(selector: selector)
+            let inspection = try await connection.inspect(selector: selector)
+            if isCurrent(connection) { inspections[selector] = inspection }
         } catch {
-            notice = "Saving settings failed: \(error.localizedDescription)"
+            report(error, "Saving settings failed", from: connection)
         }
     }
 
@@ -99,12 +143,12 @@ extension AppModel {
         Task {
             do {
                 try await connection.pull(repoID: repoID) { progress in
-                    await self.setTransfer(repoID, progress)
+                    await self.setTransfer(repoID, progress, from: connection)
                 }
             } catch {
-                notice = "Downloading \(repoID) failed: \(error.localizedDescription)"
+                report(error, "Downloading \(repoID) failed", from: connection)
             }
-            transfers[repoID] = nil
+            if isCurrent(connection) { transfers[repoID] = nil }
             try? await refreshModels(connection)
         }
     }
@@ -115,7 +159,7 @@ extension AppModel {
             do {
                 _ = try await connection.remove(repoID: repoID)
             } catch {
-                notice = "Removing \(repoID) failed: \(error.localizedDescription)"
+                report(error, "Removing \(repoID) failed", from: connection)
             }
             try? await refreshModels(connection)
         }
@@ -126,11 +170,11 @@ extension AppModel {
         Task { _ = try? await connection.cancel(operationID: activity.id) }
     }
 
-    func setLoad(_ selector: String, _ progress: LoadProgress) {
-        loads[selector] = progress
+    func setLoad(_ selector: String, _ progress: LoadProgress, from connection: RuntimeConnection) {
+        if isCurrent(connection) { loads[selector] = progress }
     }
 
-    func setTransfer(_ repoID: String, _ progress: TransferProgress) {
-        transfers[repoID] = progress
+    func setTransfer(_ repoID: String, _ progress: TransferProgress, from connection: RuntimeConnection) {
+        if isCurrent(connection) { transfers[repoID] = progress }
     }
 }

@@ -6,8 +6,9 @@ Product decisions: <https://claude.ai/artifact/KQwehDZuHXFEjDX3qzxqZy>
 ## Decision: a gRPC client that supervises `mirmir`, not a libmir wrapper
 
 The app is a SwiftUI client of mirmir's private `Runtime` gRPC service
-(`Proto/mirmir.proto`). It contains no inference engine. For the local
-instance it attaches to a running `mirmir` server or starts one.
+(`Proto/mirmir.proto`). It bundles mirmir (with libmir and MLX) as a separate
+helper process, `Contents/Helpers/mirmir`, but its own code never links the
+engine. For the local instance it starts the bundled one inside its sandbox.
 
 Embedding `libmir` behind a C ABI was rejected:
 
@@ -47,29 +48,94 @@ enums once, in `MirmirKit/Protocol`. Views never compare strings.
 
 ## Instances and the connection
 
-`InstanceTarget` is `personal | system | socket(path) | remote(address)`.
+`InstanceTarget` is `personal | remote(address)`.
 The app has exactly one current connection; switching the instance in the
 sidebar or menu bar switches every screen.
 
-- **Personal** resolves the socket like `mirmir`'s `Paths::discover`:
-  `$XDG_RUNTIME_DIR/mirmir`, else `$MIRMIR_STATE_HOME`, `$XDG_STATE_HOME/mirmir`,
-  `~/.local/state/mirmir`, then `mirmir.sock`.
-- **System** is `/run/mirmir/mirmir.sock`; **socket** is any explicit path.
-- **Remote** is stored with its address and shown, but connecting reports that
-  the server side (TLS listener, API keys, scopes) is not implemented yet.
+- **Personal** is the app's own server. Its socket resolves like `mirmir`'s
+  `Paths::discover` (`$XDG_RUNTIME_DIR/mirmir`, else `$MIRMIR_STATE_HOME`,
+  `$XDG_STATE_HOME/mirmir`, `~/.local/state/mirmir`, then `mirmir.sock`).
+  Under the sandbox `HOME` is the container, whose path grows with the
+  account name: with a 32-character name the container socket would be 111
+  bytes, past the 103 that Darwin's `sun_path` holds. The sandbox allows
+  binding a socket only inside the container, so `SocketPaths.runtimeLink`
+  keeps the runtime directory there (`.local/state/mirmir/run`) and reaches
+  it through a symlink in the app's per-user directory,
+  `confstr(_CS_DARWIN_USER_DIR)` =
+  `/var/folders/…/0/tech.mirmir.app/run`, whose length does not depend on
+  the account. The app passes that link to its server as `XDG_RUNTIME_DIR`,
+  so both name the socket `/var/folders/…/0/tech.mirmir.app/run/mirmir/mirmir.sock`
+  (about 90 bytes). It recreates the link before every connect and server
+  start. Outside the sandbox (debug runs) nothing changes. A CLI server's or
+  the system server's socket is outside the container and refused by the
+  sandbox, so neither is an instance kind; reach such a server as a remote
+  one.
+- **Remote** is a server's TLS listener at `host:port` (default 7443). Every
+  call carries `authorization: Bearer mmk_…`; the key lives in the Keychain
+  (`CredentialStore`), never in `instances.json`. The certificate is pinned by
+  its SHA-256 fingerprint, read without trusting it or sending the key and
+  confirmed by the user in Add Server (`RemoteTLS`, NIOSSL's verification
+  callback). A different certificate later is *certificate changed*; Edit
+  Server reads and trusts the new one under the same identity. Without a pin
+  the certificate must chain to a system CA. `PinningTests` performs the
+  handshake on loopback: right pin, wrong pin, no pin.
+
+A saved server's identity (`InstanceRecord.id`) owns its chats and images.
+Edit Server changes its name, address, key and pin in place. A removed server
+with chats is kept in `removed-instances.json`; adding a server at the same
+host and port again takes its identity back, and with it the chats. Model
+paths reported by a remote server are matched as written, never resolved
+against this Mac's file system.
+
+Remote-access management (`GetRemoteAccess`, `SetRemoteAccess`,
+`CreateRemoteKey`, `RevokeRemoteKey`) is served by mirmir only over its local
+socket, so the Remote Access sheet always opens its own connection to This
+Mac (`RemoteAccessController`).
 
 Every connection checks `Health.protocol_version` against the client's
-protocol (`1`). A mismatch is the *Update needed* state.
+protocol (`2`). A mismatch is the *Update needed* state.
+
+## Sandbox
+
+Both editions, the Developer ID DMG and the Mac App Store build, are
+sandboxed. `Resources/Mirmir.entitlements` grants the app `network.client`
+(remote servers, Hugging Face), `network.server` (the HTTP API and the remote
+listener), `files.user-selected.read-write` and `files.bookmarks.app-scope`.
+The helper is signed with `Resources/MirmirHelper.entitlements`: exactly
+`app-sandbox` and `inherit`, as the App Store requires for a bundled
+executable, so it runs in the app's sandbox and container.
+
+Model folders (`ModelFolders`) are chosen in an open panel and kept as
+security-scoped bookmarks in `model-folders.json`. Access starts when the
+store loads, before the server starts, and a child process inherits it; a
+granted folder was readable by the server both when granted while it ran and
+when granted before it started. A granted Hugging Face cache (a folder with
+`models--*`, or its `hub`) is passed as `HF_HUB_CACHE`, mirmir's external hub
+cache; changing it restarts the server. Other folders load by path. A
+`mirmir` configuration key for model folders is a later step.
+
+Every unary call has a deadline by kind (`CallDeadlines`, `UnaryCall`):
+Health 5 s, monitoring (Telemetry, its history, active models) 10 s,
+discovery (local models, inspection, remote access status) 15 s, the
+Hugging Face search 30 s, and changes 60 s. A missed deadline is
+`ConnectionError.timedOut`, which counts as unreachable: a server that
+answers Health and then stops answering is dropped and reconnected instead of
+leaving the session on stale data, a probe of another instance or Add
+Server's test waiting forever. Server-streaming calls (Generate, Load, Pull,
+WatchActivity) have no deadline; they end with their stream or when
+cancelled.
 
 ## Local server lifecycle
 
-On launch the app connects to the personal socket. If no server answers (no
-socket, or a stale socket that refuses connections, which `mirmir serve`
-recovers) it starts `mirmir serve` as a child process: a path from settings,
-`MIRMIR_BINARY`, the binary bundled at `Mirmir.app/Contents/Helpers/mirmir`,
-else `mirmir` on `PATH`.
+On launch the app connects to its socket. If no server answers (no socket, or
+a stale socket that refuses connections, which `mirmir serve` recovers) it
+starts `Mirmir.app/Contents/Helpers/mirmir serve` as a child process; there is
+no other binary. On the first start, when the container has no
+`config.toml`, it runs `mirmir config set server.http_bind 127.0.0.1:18080`,
+so the app's HTTP API does not collide with a CLI server on 8080.
 
-The server writes to `~/Library/Logs/Mirmir/server.log`, never to pipes, and
+The server writes to `~/Library/Logs/Mirmir/server.log` in the container,
+never to pipes, and
 the Logs screen tails that file. With pipes, a server that outlived the app
 wrote into a closed pipe. Testing then showed a poisoned runtime lock in that
 orphaned server. The cause is not proven, but a file sidesteps it, and a
@@ -77,14 +143,25 @@ re-attached app still shows the log.
 
 An owned server is stopped with `SIGTERM` (graceful shutdown, 10 s before
 `SIGKILL`) on *Pause server* and on quit, including a quit caused by
-`SIGTERM`/`SIGINT` to the app. A server started by someone else (CLI, TUI,
-launchd) is attached and never stopped by the app.
+`SIGTERM`/`SIGINT` to the app. While the first launch writes the
+configuration the server counts as starting (`ServerOwnership.configuring`).
+A server that outlived a crashed app is recovered on the next launch when the
+process at the other end of the container socket (`LOCAL_PEERPID`) runs this
+bundle's helper (`proc_pidpath`); it is then paused, restarted and stopped on
+quit like one the app started. One that cannot be verified, such as another
+copy's, is attached and left alone.
+
+Chats are read only after older copies of the app have quit and flushed
+theirs. A deleted chat's images are removed once a save without the chat is
+on disk. When `chats.json` cannot be read the session never writes it, and
+quitting with chats of that session asks first.
 
 The gRPC client sets the HTTP/2 `:authority` to `localhost` for Unix sockets.
 grpc-swift's default is the socket path, which is not a valid authority, and
 tonic rejects it.
 
-Later: an `SMAppService` launch agent so serving survives quitting the app.
+Later: an `SMAppService` launch agent so serving survives quitting the app,
+and a `mirmir` configuration key listing model folders.
 
 ## Protocol gaps (proposed `mirmir.proto` additions)
 
@@ -99,23 +176,19 @@ Later: an `SMAppService` launch agent so serving survives quitting the app.
 | Chat: Thinking toggle, JSON mode | — | `reasoning` mode and response format on `GenerateRequest` |
 | Logs for an attached server | — | log stream RPC |
 | Pause for an attached server | — | shutdown RPC (Control scope) |
-| Remote instances | — | TLS listener, keys, scopes (product doc, steps 5–7) |
 
 ## mirmir issues found while testing the app
 
-- **Two memory sources.** `Telemetry` reports the Metal working-set budget
-  (`Metal unified memory`, 55.7 GB on a 64 GB M3 Max); `TelemetryHistory`
-  samples host RAM through `sysinfo` (`macOS unified system memory`, 68.7 GB).
-  The app labels each value with its `memory_source`. The server should report
-  one source, or both explicitly.
-- **Residency through a symlinked cache.** With `hf-hub` reached through a
-  symlink, `ListLocalModels` lists a restored model as `available` under the
-  symlink path while `ListActiveModels` reports it under the resolved path. The
-  app treats `ListActiveModels` as authoritative and matches resolved paths.
-  The server should canonicalize the paths it compares.
+- **Two memory sources** (fixed in protocol 2). `Telemetry` reported the Metal
+  working set and `TelemetryHistory` host RAM under one free-form label. Now
+  `host_memory` and `accelerator_memory` are separate, with a typed
+  `AcceleratorMemoryPool`; the app decodes them into `MemoryPool`.
+- **Residency through a symlinked cache** (fixed in mirmir 0.6.0).
+  `ListLocalModels` now reports canonical paths, the ones `ListActiveModels`
+  returns.
 
 ## Build
 
-SwiftPM, macOS 15+ (grpc-swift 2 requires it). `swift build` for development;
-`scripts/bundle.sh` assembles `Mirmir.app` with `Info.plist` and, if provided,
+SwiftPM for `MirmirKit`/`MirmirRPC`, `Mirmir.xcodeproj` for the app bundle. The kit needs macOS 15+ (grpc-swift 2); the app needs macOS 27 on Apple silicon, the target of the MLX it bundles. `swift test` for the kit;
+`scripts/bundle.sh` builds `Mirmir.app` with `xcodebuild`, embedding, in Debug or when given,
 the `mirmir` helper binary.

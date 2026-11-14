@@ -12,7 +12,7 @@ struct SessionsView: View {
             TableColumn("Operation") { activity in Text(activity.kind.label) }
                 .width(90)
             TableColumn("Target") { activity in
-                Text(activity.target).lineLimit(1).truncationMode(.middle)
+                Text(model.displayTarget(of: activity)).lineLimit(1).truncationMode(.middle)
             }
             TableColumn("Stage") { activity in Text(activity.stage).font(.mono(12)) }
                 .width(110)
@@ -45,6 +45,12 @@ struct SessionsView: View {
             }
         }
         .navigationTitle("Sessions")
-        .navigationSubtitle("\(model.activeOperations.count) active")
+        .navigationSubtitle("\(model.currentInstance.name) · \(model.activeOperations.count) active")
     }
 }
+
+#if DEBUG
+#Preview("Sessions", traits: .fixedLayout(width: 1070, height: 800)) {
+    NavigationStack { SessionsView() }.previewModel()
+}
+#endif

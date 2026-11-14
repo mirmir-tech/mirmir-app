@@ -8,11 +8,6 @@ public enum ReplyState: Hashable, Sendable, Codable {
     case failed(message: String)
 }
 
-public enum MessageBody: Hashable, Sendable, Codable {
-    case user(text: String, hasImage: Bool)
-    case assistant(text: String, reasoning: String, thinkingSeconds: Double?, state: ReplyState)
-}
-
 public struct ChatMessage: Identifiable, Hashable, Sendable, Codable {
     public let id: UUID
     public let date: Date
@@ -45,13 +40,20 @@ public struct ChatMessage: Identifiable, Hashable, Sendable, Codable {
 
 public struct Conversation: Identifiable, Hashable, Sendable, Codable {
     public let id: UUID
+    /// The server the conversation talks to; its model selector means
+    /// nothing on another server.
+    public let instanceID: UUID
     public var title: String
     public var model: String
     public var updatedAt: Date
     public var messages: [ChatMessage]
 
-    public init(id: UUID = UUID(), title: String = "New Chat", model: String, updatedAt: Date = Date(), messages: [ChatMessage] = []) {
+    public init(
+        id: UUID = UUID(), instanceID: UUID, title: String = "New Chat", model: String,
+        updatedAt: Date = Date(), messages: [ChatMessage] = []
+    ) {
         self.id = id
+        self.instanceID = instanceID
         self.title = title
         self.model = model
         self.updatedAt = updatedAt
@@ -86,6 +88,30 @@ public struct Conversation: Identifiable, Hashable, Sendable, Codable {
             let repository = parts[snapshots - 1]
             return repository.components(separatedBy: "--").last ?? repository
         }
+        // A local directory named like the cache, `owner--name`.
+        if selector.hasPrefix("/"), let last = parts.last, last.contains("--") {
+            return last.components(separatedBy: "--").last ?? last
+        }
         return parts.last ?? selector
+    }
+}
+
+extension Conversation {
+    private enum CodingKeys: String, CodingKey {
+        case id, instanceID, title, model, updatedAt, messages
+    }
+
+    /// Chats saved before conversations were tied to a server have no
+    /// `instanceID`; they belong to This Mac.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try container.decode(UUID.self, forKey: .id),
+            instanceID: try container.decodeIfPresent(UUID.self, forKey: .instanceID) ?? InstanceRecord.thisMacID,
+            title: try container.decode(String.self, forKey: .title),
+            model: try container.decode(String.self, forKey: .model),
+            updatedAt: try container.decode(Date.self, forKey: .updatedAt),
+            messages: try container.decode([ChatMessage].self, forKey: .messages)
+        )
     }
 }

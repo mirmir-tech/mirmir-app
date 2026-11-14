@@ -25,21 +25,30 @@ struct ThreadView: View {
                     if let last = conversation.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
-            Composer(conversation: conversation)
+            // Keyed by conversation, so no view state outlives a switch; the
+            // draft itself lives in the chat controller per conversation.
+            Composer(conversation: conversation).id(conversation.id)
         }
     }
 }
 
 struct MessageView: View {
+    @Environment(AppModel.self) private var model
     let message: ChatMessage
 
     var body: some View {
         switch message.body {
-        case .user(let text, let hasImage):
+        case .user(let text, let image):
             HStack {
                 Spacer(minLength: 120)
                 VStack(alignment: .trailing, spacing: 4) {
-                    if hasImage { Label("Image attached", systemImage: "photo").font(.system(size: 11)).opacity(0.85) }
+                    switch image {
+                    case .stored(let id) where model.chat.unreadableImages.contains(id):
+                        Label("Image unavailable", systemImage: "photo.badge.exclamationmark").font(.system(size: 11)).opacity(0.85)
+                    case .stored: Label("Image attached", systemImage: "photo").font(.system(size: 11)).opacity(0.85)
+                    case .unavailable: Label("Image not kept", systemImage: "photo.badge.exclamationmark").font(.system(size: 11)).opacity(0.85)
+                    case nil: EmptyView()
+                    }
                     Text(text).textSelection(.enabled)
                 }
                 .padding(.horizontal, 13)
@@ -118,21 +127,40 @@ struct AssistantMessage: View {
 struct Composer: View {
     @Environment(AppModel.self) private var model
     let conversation: Conversation
-    @State private var draft = ""
-    @State private var image: Data?
+
+    private var draft: ComposerDraft { model.chat.draft(for: conversation.id) }
+
+    private var text: Binding<String> {
+        let chat = model.chat, id = conversation.id
+        return Binding { chat.draft(for: id).text } set: { chat.setDraftText($0, for: id) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField(placeholder, text: $draft, axis: .vertical)
+            TextField(placeholder, text: text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(2...10)
                 .padding(EdgeInsets(top: 11, leading: 14, bottom: 4, trailing: 14))
                 .onSubmit(send)
             HStack(spacing: 6) {
-                Button(action: attach) { Image(systemName: image == nil ? "paperclip" : "photo.fill") }
+                if draft.isPreparingImage {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(action: attach) { Image(systemName: draft.image == nil ? "paperclip" : "photo.fill") }
+                        .buttonStyle(.borderless)
+                        .disabled(!(model.model(selector: conversation.model)?.imageInput ?? false))
+                        .help("Attach an image for vision models. It stays with the conversation; a new one replaces it.")
+                }
+                if draft.image != nil {
+                    Button { model.chat.removeDraftImage(for: conversation.id) } label: {
+                        Label(draft.isPreparingImage ? "Preparing image" : "Image", systemImage: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                    }
                     .buttonStyle(.borderless)
-                    .disabled(!(model.model(selector: conversation.model)?.imageInput ?? false))
-                    .help("Attach an image for vision models")
+                    .foregroundStyle(.secondary)
+                    .help("Remove the image from this message")
+                    .accessibilityLabel("Remove image")
+                }
                 Spacer()
                 if let tokens = conversation.contextTokens {
                     Text("\(Format.grouped(tokens)) tokens").font(.mono(11)).foregroundStyle(.secondary)
@@ -144,7 +172,7 @@ struct Composer: View {
                 } else {
                     Button(action: send) { Image(systemName: "arrow.up") }
                         .buttonStyle(.borderedProminent).clipShape(Circle())
-                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(draft.isPreparingImage || draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return, modifiers: .command)
                         .accessibilityLabel("Send")
                 }
@@ -164,15 +192,26 @@ struct Composer: View {
 
     private func send() {
         guard !model.chat.isGenerating else { return }
-        model.chat.send(draft, image: image)
-        draft = ""
-        image = nil
+        model.chat.sendDraft(of: conversation.id)
     }
 
     private func attach() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .heic, .webP]
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .webP, .heic, .tiff]
         panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url { image = try? Data(contentsOf: url) }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        // HEIC and TIFF become JPEG and tagged photos are turned upright,
+        // off the main actor; the result stays with this conversation.
+        let chat = model.chat, id = conversation.id
+        Task { await chat.attachImage(to: id) { try Data(contentsOf: url) } }
     }
 }
+
+#if DEBUG
+#Preview("Thread", traits: .fixedLayout(width: 720, height: 700)) {
+    let model = AppModel.preview()
+    if let conversation = model.chat.conversations.first {
+        ThreadView(conversation: conversation).previewModel(model)
+    }
+}
+#endif

@@ -280,6 +280,58 @@ public enum Mirmir_V1_Runtime: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetRemoteAccess" metadata.
+        public enum GetRemoteAccess: Sendable {
+            /// Request type for "GetRemoteAccess".
+            public typealias Input = Mirmir_V1_GetRemoteAccessRequest
+            /// Response type for "GetRemoteAccess".
+            public typealias Output = Mirmir_V1_RemoteAccessStatus
+            /// Descriptor for "GetRemoteAccess".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "mirmir.v1.Runtime"),
+                method: "GetRemoteAccess",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetRemoteAccess" metadata.
+        public enum SetRemoteAccess: Sendable {
+            /// Request type for "SetRemoteAccess".
+            public typealias Input = Mirmir_V1_SetRemoteAccessRequest
+            /// Response type for "SetRemoteAccess".
+            public typealias Output = Mirmir_V1_RemoteAccessStatus
+            /// Descriptor for "SetRemoteAccess".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "mirmir.v1.Runtime"),
+                method: "SetRemoteAccess",
+                type: .unary
+            )
+        }
+        /// Namespace for "CreateRemoteKey" metadata.
+        public enum CreateRemoteKey: Sendable {
+            /// Request type for "CreateRemoteKey".
+            public typealias Input = Mirmir_V1_CreateRemoteKeyRequest
+            /// Response type for "CreateRemoteKey".
+            public typealias Output = Mirmir_V1_CreateRemoteKeyResponse
+            /// Descriptor for "CreateRemoteKey".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "mirmir.v1.Runtime"),
+                method: "CreateRemoteKey",
+                type: .unary
+            )
+        }
+        /// Namespace for "RevokeRemoteKey" metadata.
+        public enum RevokeRemoteKey: Sendable {
+            /// Request type for "RevokeRemoteKey".
+            public typealias Input = Mirmir_V1_RevokeRemoteKeyRequest
+            /// Response type for "RevokeRemoteKey".
+            public typealias Output = Mirmir_V1_RevokeRemoteKeyResponse
+            /// Descriptor for "RevokeRemoteKey".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "mirmir.v1.Runtime"),
+                method: "RevokeRemoteKey",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "mirmir.v1.Runtime" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Health.descriptor,
@@ -301,7 +353,11 @@ public enum Mirmir_V1_Runtime: Sendable {
             GetConfiguration.descriptor,
             UpdateConfiguration.descriptor,
             WatchActivity.descriptor,
-            CancelOperation.descriptor
+            CancelOperation.descriptor,
+            GetRemoteAccess.descriptor,
+            SetRemoteAccess.descriptor,
+            CreateRemoteKey.descriptor,
+            RevokeRemoteKey.descriptor
         ]
     }
 }
@@ -699,6 +755,87 @@ extension Mirmir_V1_Runtime {
             deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_CancelOperationResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_CancelOperationResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetRemoteAccess" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Remote access management. Served only over the local Unix socket: no
+        /// > remote key, whatever its scope, can change keys or the listener.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_GetRemoteAccessRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_GetRemoteAccessRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_RemoteAccessStatus` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getRemoteAccess<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_GetRemoteAccessRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_GetRemoteAccessRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_RemoteAccessStatus>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetRemoteAccess" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_SetRemoteAccessRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_SetRemoteAccessRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_RemoteAccessStatus` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setRemoteAccess<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_SetRemoteAccessRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_SetRemoteAccessRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_RemoteAccessStatus>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "CreateRemoteKey" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_CreateRemoteKeyRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_CreateRemoteKeyRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_CreateRemoteKeyResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func createRemoteKey<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_CreateRemoteKeyRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_CreateRemoteKeyRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_CreateRemoteKeyResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_CreateRemoteKeyResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RevokeRemoteKey" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_RevokeRemoteKeyRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_RevokeRemoteKeyRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_RevokeRemoteKeyResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func revokeRemoteKey<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_RevokeRemoteKeyRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_RevokeRemoteKeyRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_RevokeRemoteKeyResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RevokeRemoteKeyResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -1309,6 +1446,131 @@ extension Mirmir_V1_Runtime {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "GetRemoteAccess" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Remote access management. Served only over the local Unix socket: no
+        /// > remote key, whatever its scope, can change keys or the listener.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_GetRemoteAccessRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_GetRemoteAccessRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_RemoteAccessStatus` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getRemoteAccess<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_GetRemoteAccessRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_GetRemoteAccessRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_RemoteAccessStatus>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Mirmir_V1_Runtime.Method.GetRemoteAccess.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetRemoteAccess" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_SetRemoteAccessRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_SetRemoteAccessRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_RemoteAccessStatus` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setRemoteAccess<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_SetRemoteAccessRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_SetRemoteAccessRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_RemoteAccessStatus>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Mirmir_V1_Runtime.Method.SetRemoteAccess.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "CreateRemoteKey" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_CreateRemoteKeyRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_CreateRemoteKeyRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_CreateRemoteKeyResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func createRemoteKey<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_CreateRemoteKeyRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_CreateRemoteKeyRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_CreateRemoteKeyResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_CreateRemoteKeyResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Mirmir_V1_Runtime.Method.CreateRemoteKey.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RevokeRemoteKey" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_RevokeRemoteKeyRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_RevokeRemoteKeyRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_RevokeRemoteKeyResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func revokeRemoteKey<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_RevokeRemoteKeyRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_RevokeRemoteKeyRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_RevokeRemoteKeyResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RevokeRemoteKeyResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Mirmir_V1_Runtime.Method.RevokeRemoteKey.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -1802,6 +2064,111 @@ extension Mirmir_V1_Runtime.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Mirmir_V1_CancelOperationRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Mirmir_V1_CancelOperationResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetRemoteAccess" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Remote access management. Served only over the local Unix socket: no
+    /// > remote key, whatever its scope, can change keys or the listener.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Mirmir_V1_GetRemoteAccessRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getRemoteAccess<Result>(
+        request: GRPCCore.ClientRequest<Mirmir_V1_GetRemoteAccessRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getRemoteAccess(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Mirmir_V1_GetRemoteAccessRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Mirmir_V1_RemoteAccessStatus>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetRemoteAccess" method.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Mirmir_V1_SetRemoteAccessRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setRemoteAccess<Result>(
+        request: GRPCCore.ClientRequest<Mirmir_V1_SetRemoteAccessRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setRemoteAccess(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Mirmir_V1_SetRemoteAccessRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Mirmir_V1_RemoteAccessStatus>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CreateRemoteKey" method.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Mirmir_V1_CreateRemoteKeyRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func createRemoteKey<Result>(
+        request: GRPCCore.ClientRequest<Mirmir_V1_CreateRemoteKeyRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_CreateRemoteKeyResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.createRemoteKey(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Mirmir_V1_CreateRemoteKeyRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Mirmir_V1_CreateRemoteKeyResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RevokeRemoteKey" method.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Mirmir_V1_RevokeRemoteKeyRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func revokeRemoteKey<Result>(
+        request: GRPCCore.ClientRequest<Mirmir_V1_RevokeRemoteKeyRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RevokeRemoteKeyResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.revokeRemoteKey(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Mirmir_V1_RevokeRemoteKeyRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Mirmir_V1_RevokeRemoteKeyResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2377,6 +2744,127 @@ extension Mirmir_V1_Runtime.ClientProtocol {
             metadata: metadata
         )
         return try await self.cancelOperation(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetRemoteAccess" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Remote access management. Served only over the local Unix socket: no
+    /// > remote key, whatever its scope, can change keys or the listener.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getRemoteAccess<Result>(
+        _ message: Mirmir_V1_GetRemoteAccessRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Mirmir_V1_GetRemoteAccessRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getRemoteAccess(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetRemoteAccess" method.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setRemoteAccess<Result>(
+        _ message: Mirmir_V1_SetRemoteAccessRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RemoteAccessStatus>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Mirmir_V1_SetRemoteAccessRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setRemoteAccess(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CreateRemoteKey" method.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func createRemoteKey<Result>(
+        _ message: Mirmir_V1_CreateRemoteKeyRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_CreateRemoteKeyResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Mirmir_V1_CreateRemoteKeyRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.createRemoteKey(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RevokeRemoteKey" method.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func revokeRemoteKey<Result>(
+        _ message: Mirmir_V1_RevokeRemoteKeyRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_RevokeRemoteKeyResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Mirmir_V1_RevokeRemoteKeyRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.revokeRemoteKey(
             request: request,
             options: options,
             onResponse: handleResponse

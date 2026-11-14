@@ -32,7 +32,7 @@ struct InstancesView: View {
                     .inspectorColumnWidth(min: 280, ideal: 320, max: 380)
             }
         }
-        .sheet(isPresented: $adding) { AddInstanceSheet() }
+        .sheet(isPresented: $adding) { InstanceSheet() }
     }
 
     private var subtitle: String {
@@ -68,7 +68,7 @@ struct InstanceCard: View {
             }
             Grid(alignment: .leading, horizontalSpacing: 12) {
                 GridRow {
-                    stat("Loaded model", summary.loadedModels.first.map { $0.split(separator: "/").last.map(String.init) ?? $0 } ?? "—")
+                    stat("Loaded model", summary.loadedModels.first.map(Conversation.modelName) ?? "—")
                     stat("Decode", summary.telemetry.map { "\(Format.rate($0.decode)) t/s" } ?? "—")
                     stat("Sessions", summary.telemetry.map { "\($0.activeRequests)" } ?? "—")
                 }
@@ -122,10 +122,8 @@ extension InstanceStatus {
     }
 }
 
-extension AppModel {
-    func address(of record: InstanceRecord) -> String {
-        if case .remote(let endpoint) = record.target { return "grpcs://\(endpoint.address)" }
-        let socket = SocketPaths().socket(for: record.target) ?? ""
-        return socket.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-    }
+#if DEBUG
+#Preview("Instances", traits: .fixedLayout(width: 1070, height: 800)) {
+    NavigationStack { InstancesView() }.previewModel()
 }
+#endif

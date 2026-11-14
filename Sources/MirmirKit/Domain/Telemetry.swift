@@ -25,7 +25,10 @@ public struct TelemetrySnapshot: Hashable, Sendable {
     public let lastTTFTMs: Double?
     public let meanTTFTMs: Double?
     public let currentTTFTMs: Double?
-    public let memory: MemoryReading?
+    /// Host RAM reported by the operating system.
+    public let hostMemory: MemoryReading?
+    /// The accelerator backend's budget; absent until the backend reports one.
+    public let acceleratorMemory: MemoryReading?
     public let kvTotalBlocks: UInt64
     public let kvUsedBlocks: UInt64
     public let kvCachedPrefixes: UInt64
@@ -34,6 +37,10 @@ public struct TelemetrySnapshot: Hashable, Sendable {
     public let activeStage: String
     public let gpuUtilizationPercent: Double?
     public let deviceName: String
+
+    /// The memory to headline: the accelerator budget models load into, else
+    /// host RAM.
+    public var memory: MemoryReading? { acceleratorMemory ?? hostMemory }
 
     /// The rate to headline: live decode while generating, else the last one.
     public var decode: Double? { currentDecode ?? lastDecode }
@@ -49,10 +56,28 @@ public struct TelemetrySnapshot: Hashable, Sendable {
     }
 }
 
+/// Which memory a reading measures. Decoded from the typed protocol 2 pool,
+/// never from a label.
+public enum MemoryPool: Hashable, Sendable {
+    case host
+    case metalWorkingSet
+    case cudaDevice
+    case cudaUnified
+
+    public var label: String {
+        switch self {
+        case .host: "Host RAM"
+        case .metalWorkingSet: "Metal working set"
+        case .cudaDevice: "CUDA device memory"
+        case .cudaUnified: "CUDA unified memory"
+        }
+    }
+}
+
 public struct MemoryReading: Hashable, Sendable {
     public let totalBytes: UInt64
     public let availableBytes: UInt64
-    public let source: String
+    public let pool: MemoryPool
 
     public var usedBytes: UInt64 { totalBytes > availableBytes ? totalBytes - availableBytes : 0 }
     public var usedRatio: Double { totalBytes == 0 ? 0 : Double(usedBytes) / Double(totalBytes) }
@@ -65,6 +90,7 @@ public struct TelemetrySample: Hashable, Sendable, Identifiable {
     public let decode: Double?
     public let prefill: Double?
     public let ttftMs: Double?
+    /// Host RAM; history never samples accelerator memory.
     public let memory: MemoryReading?
     public let kvTotalBlocks: UInt64
     public let kvUsedBlocks: UInt64

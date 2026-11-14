@@ -22,11 +22,8 @@ extension TelemetrySnapshot {
             lastTTFTMs: optional(wire.hasLastTtftMs, wire.lastTtftMs),
             meanTTFTMs: optional(wire.hasMeanTtftMs, wire.meanTtftMs),
             currentTTFTMs: optional(wire.hasCurrentTtftMs, wire.currentTtftMs),
-            memory: MemoryReading(
-                total: wire.hasHostTotalMemoryBytes ? wire.hostTotalMemoryBytes : nil,
-                available: wire.hasHostAvailableMemoryBytes ? wire.hostAvailableMemoryBytes : nil,
-                source: wire.memorySource
-            ),
+            hostMemory: wire.hasHostMemory ? MemoryReading(wire.hostMemory) : nil,
+            acceleratorMemory: wire.hasAcceleratorMemory ? MemoryReading(wire.acceleratorMemory) : nil,
             kvTotalBlocks: wire.kvTotalBlocks,
             kvUsedBlocks: wire.kvUsedBlocks,
             kvCachedPrefixes: wire.kvCachedPrefixes,
@@ -40,9 +37,26 @@ extension TelemetrySnapshot {
 }
 
 extension MemoryReading {
-    init?(total: UInt64?, available: UInt64?, source: String) {
+    init?(total: UInt64?, available: UInt64?, pool: MemoryPool) {
         guard let total, let available, total > 0 else { return nil }
-        self.init(totalBytes: total, availableBytes: available, source: source)
+        self.init(totalBytes: total, availableBytes: available, pool: pool)
+    }
+
+    init?(_ wire: Mirmir_V1_HostMemory) {
+        self.init(total: wire.totalBytes, available: wire.availableBytes, pool: .host)
+    }
+
+    /// `nil` for an unspecified or unknown pool: a reading is never shown
+    /// under a guessed name.
+    init?(_ wire: Mirmir_V1_AcceleratorMemory) {
+        let pool: MemoryPool
+        switch wire.pool {
+        case .metalWorkingSet: pool = .metalWorkingSet
+        case .cudaDevice: pool = .cudaDevice
+        case .cudaUnified: pool = .cudaUnified
+        case .unspecified, .UNRECOGNIZED: return nil
+        }
+        self.init(total: wire.totalBytes, available: wire.availableBytes, pool: pool)
     }
 }
 
@@ -55,11 +69,7 @@ extension TelemetrySample {
             decode: wire.hasDecodeTokensPerSecond ? wire.decodeTokensPerSecond : nil,
             prefill: wire.hasPrefillTokensPerSecond ? wire.prefillTokensPerSecond : nil,
             ttftMs: wire.hasTtftMs ? wire.ttftMs : nil,
-            memory: MemoryReading(
-                total: wire.hasMemoryTotalBytes ? wire.memoryTotalBytes : nil,
-                available: wire.hasMemoryAvailableBytes ? wire.memoryAvailableBytes : nil,
-                source: wire.memorySource
-            ),
+            memory: wire.hasHostMemory ? MemoryReading(wire.hostMemory) : nil,
             kvTotalBlocks: wire.kvTotalBlocks,
             kvUsedBlocks: wire.kvUsedBlocks
         )

@@ -5,111 +5,217 @@ import Observation
 @MainActor
 @Observable
 public final class ChatController {
-    public private(set) var conversations: [Conversation]
+    public internal(set) var conversations: [Conversation]
     public var selectedID: UUID?
     public var temperature: Float?
     public var maxTokens: UInt64?
 
     weak var model: AppModel?
-    private let file = JSONFile<[Conversation]>(name: "chats.json")
-    private var generation: Task<Void, Never>?
-    private var operationID: String?
+    /// Where chats and their images are kept; nil for previews, whose
+    /// sample chats stay in memory.
+    let store: ChatStore?
+    /// Why the saved chats did not load as written; shown above the list.
+    public internal(set) var loadIssue: ChatLoadIssue?
+    /// Why the latest save failed; nil once a save succeeds.
+    public internal(set) var saveFailure: ChatSaveFailure?
+    /// Numbers saves, so only the newest one's outcome is reported.
+    @ObservationIgnored var saveGeneration = 0
+    @ObservationIgnored var retryTask: Task<Void, Never>?
+    /// Stored images a request needed but could not read, shown as
+    /// unavailable on their messages. Read again on every send.
+    public internal(set) var unreadableImages: Set<UUID> = []
+    /// Images of a session whose chats are not saved: previews, and a
+    /// session that must leave an unreadable `chats.json` untouched.
+    @ObservationIgnored var sessionImages: [UUID: Data] = [:]
+    /// Images of deleted chats, removed from the attachment store only once
+    /// a save without those chats is on disk.
+    @ObservationIgnored var discardedImages: Set<UUID> = []
+    /// Whether a session that must not save over unreadable history changed
+    /// its chats; quitting then loses those changes.
+    public internal(set) var hasUnsavedChanges = false
+    /// Serial, so saves land in order; encoding every chat stays off the
+    /// main actor.
+    let saver = DispatchQueue(label: "tech.mirmir.app.chats", qos: .utility)
+    /// The reply streaming now, with the conversation that owns it.
+    private var active: ActiveGeneration?
+    /// Streaming publishes at most this often; every write re-renders the
+    /// thread and the conversation list.
+    private static let streamInterval: Duration = .milliseconds(50)
+    private var lastStreamWrite: ContinuousClock.Instant?
+    /// What each conversation's composer holds until it is sent.
+    public internal(set) var drafts: [UUID: ComposerDraft] = [:]
 
-    init() {
-        conversations = (file.load() ?? []).map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
-        selectedID = conversations.first?.id
+    /// Whether the saved chats were read; until then nothing is saved, so
+    /// the file another copy of the app may still write is not replaced.
+    @ObservationIgnored var historyLoaded = false
+
+    /// `loadingNow` false waits for `loadHistory`, as the app does until an
+    /// older copy of itself has quit and saved its chats.
+    init(store: ChatStore?, loadingNow: Bool = true) {
+        self.store = store
+        conversations = []
+        if loadingNow { loadHistory() }
+    }
+
+    /// The current server's conversations; the others stay saved for when
+    /// that server is current again.
+    public var visibleConversations: [Conversation] {
+        guard let instance = model?.currentInstanceID else { return [] }
+        return conversations.filter { $0.instanceID == instance }
     }
 
     public var selected: Conversation? {
-        conversations.first { $0.id == selectedID }
+        visibleConversations.first { $0.id == selectedID }
     }
 
-    public var isGenerating: Bool { generation != nil }
-
-    @discardableResult
-    public func newConversation(model selector: String? = nil) -> UUID {
-        let selector = selector ?? model?.primaryModel.map { model?.servingSelector(for: $0) ?? $0.selector } ?? ""
-        let conversation = Conversation(model: selector)
-        conversations.insert(conversation, at: 0)
-        selectedID = conversation.id
-        persist()
-        return conversation.id
+    /// Called when the current server changes: select its latest chat.
+    func instanceChanged() {
+        stop()
+        selectedID = visibleConversations.first?.id
     }
 
-    public func delete(_ id: UUID) {
-        if id == selectedID { stop() }
-        conversations.removeAll { $0.id == id }
-        if selectedID == id { selectedID = conversations.first?.id }
-        persist()
-    }
+    public var isGenerating: Bool { active != nil }
+
+    /// The conversation whose reply is streaming, if any.
+    public var generatingConversation: UUID? { active?.conversation }
 
     public func setModel(_ selector: String, for id: UUID) {
         update(id) { $0.model = selector }
     }
 
-    public func send(_ text: String, image: Data? = nil) {
+    /// Sends a message to `conversation`, else the selected one or a new
+    /// one; returns whether it was sent. `image` must already be normalized
+    /// (`ImageNormalizer`); it is kept with the message, so later turns and
+    /// a reopened chat still send it. When the conversation's newest image
+    /// cannot be read nothing is sent: the notice says so, the draft stays,
+    /// and attaching the image again (or starting a new chat) continues.
+    @discardableResult
+    public func send(_ text: String, image: Data? = nil, to conversation: UUID? = nil) -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, generation == nil, let connection = model?.connection else { return }
-        let id = selectedID ?? newConversation()
+        guard !text.isEmpty, active == nil, let connection = model?.connection else { return false }
+        let id = conversation ?? selected?.id ?? newConversation()
         if conversations.first(where: { $0.id == id })?.model.isEmpty == true, let loaded = model?.primaryModel {
             let selector = model?.servingSelector(for: loaded) ?? loaded.selector
             update(id) { $0.model = selector }
         }
         guard let conversation = conversations.first(where: { $0.id == id }), !conversation.model.isEmpty else {
             model?.notice = "Choose a loaded model before sending."
-            return
+            return false
         }
-        let reply = ChatMessage(body: .assistant(text: "", reasoning: "", thinkingSeconds: nil, state: .streaming))
-        update(id) { conversation in
-            if conversation.messages.isEmpty { conversation.title = String(text.prefix(60)) }
-            conversation.messages.append(ChatMessage(body: .user(text: text, hasImage: image != nil)))
-            conversation.messages.append(reply)
+        if let refusal = imageRefusal(for: conversation, attaching: image != nil) {
+            model?.notice = refusal.localizedDescription
+            return false
         }
-        let turns = (conversations.first { $0.id == id }?.messages ?? []).dropLast().compactMap(\.turn)
-        let request = GenerationRequest(
-            model: conversation.model, turns: Array(turns), maxTokens: maxTokens, temperature: temperature, image: image
-        )
-        let stream = ReplyAccumulator()
-        generation = Task {
+        var attached: MessageImage?
+        if let image {
+            guard image.count <= MessageLimits.imageBytes else {
+                model?.notice = ImageNormalizationError.tooLarge(bytes: image.count).localizedDescription
+                return false
+            }
             do {
-                try await connection.generate(request) { event in
-                    await self.receive(event, into: stream, conversation: id, reply: reply.id)
-                }
-                finish(id, reply.id, stream: stream, state: nil)
+                attached = .stored(try keep(image))
             } catch {
-                let state: ReplyState = Task.isCancelled ? .stopped : .failed(message: error.localizedDescription)
-                finish(id, reply.id, stream: stream, state: state)
+                model?.notice = "Could not keep the image: \(error.localizedDescription)"
+                return false
             }
         }
+        let user = ChatMessage(body: .user(text: text, image: attached))
+        let reply = ChatMessage(body: .assistant(text: "", reasoning: "", thinkingSeconds: nil, state: .streaming))
+        var pending = conversation
+        pending.messages += [user, reply]
+        let request: GenerationRequest
+        var read: UUID?
+        do {
+            request = try pending.request(replyingTo: reply.id, maxTokens: maxTokens, temperature: temperature) { stored in
+                read = stored
+                // The new image is in memory; earlier ones come from disk.
+                if case .stored(stored) = attached, let image { return image }
+                return try imageData(stored)
+            }
+        } catch {
+            if case .imageUnavailable(let id, _) = error { unreadableImages.insert(id) }
+            model?.notice = error.localizedDescription
+            return false
+        }
+        if let read { unreadableImages.remove(read) }
+        update(id) { conversation in
+            if conversation.messages.isEmpty { conversation.title = String(text.prefix(60)) }
+            conversation.messages += [user, reply]
+        }
+        // Runs its main-actor parts only after `active` is set below.
+        let task = Task {
+            do {
+                try await connection.generate(request) { event in
+                    await self.receive(event, reply: reply.id)
+                }
+                finish(reply.id, state: nil)
+            } catch {
+                let cancelled = Task.isCancelled || ConnectionError.wrap(error) == .cancelled
+                finish(reply.id, state: cancelled ? .stopped : .failed(message: error.localizedDescription))
+            }
+        }
+        active = ActiveGeneration(
+            conversation: id, reply: reply.id, stream: ReplyAccumulator(), task: task, connection: connection
+        )
+        return true
     }
 
-    /// Cancels the RPC and asks the server to cancel the operation, which
-    /// frees the session even if the disconnect is observed late.
+    /// Ends the streaming reply now, keeping what streamed as stopped (as
+    /// completed if its completion already arrived). Cancels the RPC and asks
+    /// the server that runs it to cancel the operation, which frees the
+    /// session even if the disconnect is observed late. Events and the
+    /// finish that arrive afterwards belong to no active reply and are
+    /// dropped.
     public func stop() {
-        guard let generation else { return }
-        generation.cancel()
-        if let operationID, let connection = model?.connection {
+        guard let current = active else { return }
+        active = nil
+        lastStreamWrite = nil
+        current.task.cancel()
+        if let operationID = current.operationID {
+            let connection = current.connection
             Task { _ = try? await connection.cancel(operationID: operationID) }
         }
+        let state = current.stream.stats.map(ReplyState.completed) ?? .stopped
+        write(current.stream, state: state, conversation: current.conversation, reply: current.reply)
+        persist()
     }
 
-    private func receive(_ event: GenerationEvent, into stream: ReplyAccumulator, conversation: UUID, reply: UUID) {
+    /// Call when the app terminates, before the connection closes: stops the
+    /// streaming reply as Stop does and saves every chat before returning.
+    /// Returns why the chats are not on disk, if they are not.
+    @discardableResult
+    public func terminate() -> ChatSaveFailure? {
+        stop()
+        return saveNow()
+    }
+
+    private func receive(_ event: GenerationEvent, reply: UUID) {
+        guard let current = active, current.reply == reply else { return }
+        let stream = current.stream
         switch event {
         case .started(let id):
-            operationID = id
+            active?.operationID = id
+            return
         case .token(let text, let reasoning):
             stream.append(text, reasoning: reasoning)
+            let now = ContinuousClock.now
+            if let last = lastStreamWrite, now - last < Self.streamInterval { return }
+            lastStreamWrite = now
         case .completed(let text, let reasoning, let stats):
             stream.complete(text: text, reasoning: reasoning, stats: stats)
         }
-        write(stream, state: stream.stats.map(ReplyState.completed) ?? .streaming, conversation: conversation, reply: reply)
+        let state = stream.stats.map(ReplyState.completed) ?? .streaming
+        write(stream, state: state, conversation: current.conversation, reply: reply)
     }
 
-    private func finish(_ conversation: UUID, _ reply: UUID, stream: ReplyAccumulator, state: ReplyState?) {
-        let final = state ?? stream.stats.map(ReplyState.completed) ?? .stopped
-        write(stream, state: final, conversation: conversation, reply: reply)
-        generation = nil
-        operationID = nil
+    /// Records how the RPC ended, unless the reply was already ended by
+    /// `stop` (or a newer one replaced it).
+    private func finish(_ reply: UUID, state: ReplyState?) {
+        guard let current = active, current.reply == reply else { return }
+        active = nil
+        lastStreamWrite = nil
+        let final = state ?? current.stream.stats.map(ReplyState.completed) ?? .stopped
+        write(current.stream, state: final, conversation: current.conversation, reply: reply)
         persist()
     }
 
@@ -127,51 +233,5 @@ public final class ChatController {
         change(&conversations[index])
         conversations[index].updatedAt = Date()
         if persisting { persist() }
-    }
-
-    private func persist() {
-        try? file.save(conversations)
-    }
-
-    /// A reply still streaming when the app quit is stored as stopped.
-    private static func settled(_ conversation: Conversation) -> Conversation {
-        var conversation = conversation
-        for index in conversation.messages.indices {
-            if case .assistant(let text, let reasoning, let seconds, .streaming) = conversation.messages[index].body {
-                conversation.messages[index].body = .assistant(text: text, reasoning: reasoning, thinkingSeconds: seconds, state: .stopped)
-            }
-        }
-        return conversation
-    }
-}
-
-/// Collects streamed fragments and measures how long the model reasoned.
-@MainActor
-final class ReplyAccumulator {
-    private(set) var text = ""
-    private(set) var reasoning = ""
-    private(set) var stats: GenerationStats?
-    private var reasoningStarted: Date?
-    private(set) var thinkingSeconds: Double?
-
-    func append(_ fragment: String, reasoning isReasoning: Bool) {
-        if isReasoning {
-            if reasoningStarted == nil { reasoningStarted = Date() }
-            reasoning += fragment
-        } else {
-            if let started = reasoningStarted, thinkingSeconds == nil {
-                thinkingSeconds = Date().timeIntervalSince(started)
-            }
-            text += fragment
-        }
-    }
-
-    func complete(text: String, reasoning: String, stats: GenerationStats) {
-        if !text.isEmpty { self.text = text }
-        if !reasoning.isEmpty { self.reasoning = reasoning }
-        if let started = reasoningStarted, thinkingSeconds == nil {
-            thinkingSeconds = Date().timeIntervalSince(started)
-        }
-        self.stats = stats
     }
 }

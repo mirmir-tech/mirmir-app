@@ -25,7 +25,7 @@ struct SessionsCard: View {
                     ForEach(activities) { activity in
                         GridRow {
                             Text(activity.kind.label)
-                            Text(activity.target).lineLimit(1).truncationMode(.middle)
+                            Text(model.displayTarget(of: activity)).lineLimit(1).truncationMode(.middle)
                             Text(activity.stage).font(.mono(12))
                             Text(Format.relative(activity.startedAt)).foregroundStyle(Palette.muted)
                             ActivityStatePill(state: activity.state, prefill: activity.isPrefill)
@@ -56,23 +56,6 @@ struct ActivityStatePill: View {
         case .failed: Pill(text: "failed", color: Palette.danger)
         case .cancelled: Pill(text: "cancelled", color: Palette.muted)
         case .unrecognized(let value): Pill(text: value, color: Palette.muted)
-        }
-    }
-}
-
-/// Toolbar menu that loads one of the local checkpoints.
-struct LoadModelMenu: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        Menu {
-            let loadable = model.models.filter { $0.loadability == .loadable && model.displayState(of: $0) != .loaded }
-            if loadable.isEmpty { Text("No other local models") }
-            ForEach(loadable) { local in
-                Button(local.displayName) { model.load(local.selector) }
-            }
-        } label: {
-            Label("Load Model", systemImage: "square.and.arrow.down.on.square")
         }
     }
 }

@@ -65,22 +65,29 @@ struct ModelInspector: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Generation defaults").font(.system(size: 12, weight: .semibold))
             if let binding = Binding($settings) {
-                Form {
-                    TextField("Max tokens", value: binding.maxTokens, format: .number)
-                    LabeledContent("Temperature") {
-                        Slider(value: binding.temperature, in: 0...2, step: 0.05)
-                        Text(String(format: "%.2f", binding.wrappedValue.temperature)).font(.mono(11)).frame(width: 36)
+                // A card like the facts and memory above, not a grouped Form,
+                // whose system background does not match the palette.
+                VStack(spacing: 0) {
+                    row("Max tokens") {
+                        TextField("Max tokens", value: binding.maxTokens, format: .number)
+                            .labelsHidden().multilineTextAlignment(.trailing).frame(width: 90)
                     }
-                    LabeledContent("Top P") {
-                        Slider(value: binding.topP, in: 0...1, step: 0.01)
-                        Text(String(format: "%.2f", binding.wrappedValue.topP)).font(.mono(11)).frame(width: 36)
+                    Divider()
+                    row("Temperature") { slider(binding.temperature, in: 0...2, step: 0.05) }
+                    Divider()
+                    row("Top P") { slider(binding.topP, in: 0...1, step: 0.01) }
+                    Divider()
+                    row("Top K") {
+                        Text("\(binding.wrappedValue.topK)").font(.mono(11)).foregroundStyle(.secondary)
+                        Stepper("Top K", value: binding.topK, in: 0...500).labelsHidden()
                     }
-                    Stepper("Top K: \(binding.wrappedValue.topK)", value: binding.topK, in: 0...500)
-                    TextField("Repetition penalty", value: binding.repetitionPenalty, format: .number.precision(.fractionLength(2)))
+                    Divider()
+                    row("Repetition penalty") {
+                        TextField("Repetition penalty", value: binding.repetitionPenalty, format: .number.precision(.fractionLength(2)))
+                            .labelsHidden().multilineTextAlignment(.trailing).frame(width: 60)
+                    }
                 }
-                .formStyle(.grouped)
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, -16)
+                .card(padding: 0)
                 HStack {
                     Spacer()
                     Button("Save Defaults") {
@@ -94,6 +101,26 @@ struct ModelInspector: View {
                     .disabled(saving || settings == model.inspections[local.selector]?.settings)
                 }
             }
+        }
+    }
+
+    private func row<Control: View>(_ title: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack(spacing: 10) {
+            Text(title).font(.system(size: 12)).lineLimit(1).layoutPriority(1)
+            Spacer(minLength: 8)
+            control()
+        }
+        .padding(.horizontal, 12)
+        .frame(minHeight: 36)
+    }
+
+    /// `Slider(step:)` draws a tick per step, a dotted line at fine steps;
+    /// snap the value in the binding instead.
+    private func slider(_ value: Binding<Float>, in range: ClosedRange<Float>, step: Float) -> some View {
+        let snapped = Binding(get: { value.wrappedValue }, set: { value.wrappedValue = ($0 / step).rounded() * step })
+        return HStack(spacing: 8) {
+            Slider(value: snapped, in: range).labelsHidden().controlSize(.small).frame(maxWidth: 140)
+            Text(String(format: "%.2f", value.wrappedValue)).font(.mono(11)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
         }
     }
 
@@ -140,9 +167,26 @@ struct MemoryEstimateView: View {
     }
 
     private var caption: String {
-        var text = "\(Format.gigabytes(memory.weightBytes)) weights + \(Format.gigabytes(memory.kvCacheBytes)) K/V"
+        var text = "\(Format.gigabytes(memory.weightBytes)) GB weights + \(Format.gigabytes(memory.kvCacheBytes)) GB K/V"
         if let budget = memory.budgetBytes { text += " of \(Format.gigabytes(budget)) GB budget" }
         if let safe = memory.maxSafeContextTokens { text += " · safe up to \(Format.grouped(safe)) tokens" }
         return text
     }
 }
+
+#if DEBUG
+#Preview("Inspector — loaded", traits: .fixedLayout(width: 340, height: 800)) {
+    let model = AppModel.preview()
+    ModelInspector(local: model.models[0]).previewModel(model)
+}
+#Preview("Inspector — over budget", traits: .fixedLayout(width: 340, height: 800)) {
+    let model = AppModel.preview()
+    ModelInspector(local: model.models[3]).previewModel(model)
+}
+#Preview("Memory estimate — over budget", traits: .sizeThatFitsLayout) {
+    let model = AppModel.preview()
+    if let memory = model.inspections[model.models[3].selector]?.memory {
+        MemoryEstimateView(memory: memory).frame(width: 300).padding()
+    }
+}
+#endif

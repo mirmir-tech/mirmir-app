@@ -3,6 +3,9 @@ import SwiftUI
 
 struct InstanceDetail: View {
     @Environment(AppModel.self) private var model
+    @State private var managingRemoteAccess = false
+    @State private var editing = false
+    @State private var confirmingRemoval = false
     let record: InstanceRecord
 
     var body: some View {
@@ -24,24 +27,32 @@ struct InstanceDetail: View {
                         ForEach(summary.loadedModels, id: \.self) { selector in
                             HStack(spacing: 8) {
                                 StatusDot(color: Palette.signal, size: 6)
-                                Text(selector).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                                Text(Conversation.modelName(selector)).font(.system(size: 12)).lineLimit(1).truncationMode(.middle)
+                                    .help(selector)
                             }
                         }
                     }
                     .card(padding: 12)
                 }
                 actions
-                if record.isThisMac { RemoteAccessNote() }
+                if record.isThisMac { RemoteAccessEntry { managingRemoteAccess = true } }
             }
             .padding(16)
+        }
+        .sheet(isPresented: $managingRemoteAccess) {
+            RemoteAccessSheet(controller: RemoteAccessController(model: model))
+        }
+        .sheet(isPresented: $editing) { InstanceSheet(editing: record) }
+        .confirmationDialog("Remove \(record.name)?", isPresented: $confirmingRemoval) {
+            Button("Remove", role: .destructive) { model.remove(instance: record.id) }
+        } message: {
+            Text(removalMessage)
         }
     }
 
     private var heading: String {
         switch record.target {
-        case .personal: "LOCAL · personal socket"
-        case .system: "LOCAL · system socket"
-        case .socket: "LOCAL · Unix socket"
+        case .personal: "LOCAL · bundled runtime"
         case .remote: "REMOTE · gRPC + TLS"
         }
     }
@@ -52,7 +63,11 @@ struct InstanceDetail: View {
             Divider()
             row("Status", summary.status.label)
             Divider()
-            row("Authentication", record.target.kind.isLocal ? "socket permissions" : "API key (planned)")
+            row("Authentication", record.target.kind.isLocal ? "socket permissions" : "API key in the Keychain")
+            if case .remote(let endpoint) = record.target {
+                Divider()
+                row("Certificate", endpoint.pinnedFingerprint.map { "pinned \($0.hex.prefix(23))…" } ?? "system CA")
+            }
             if let uptime = summary.telemetry?.uptime {
                 Divider()
                 row("Uptime", Format.duration(uptime))
@@ -89,21 +104,48 @@ struct InstanceDetail: View {
             .frame(maxWidth: .infinity)
         }
         if !record.isThisMac {
-            Button("Remove Instance", role: .destructive) { model.remove(instance: record.id) }
+            Button("Edit Server…") { editing = true }
+                .frame(maxWidth: .infinity)
+            Button("Remove Instance", role: .destructive) { confirmingRemoval = true }
                 .frame(maxWidth: .infinity)
         }
     }
+
+    private var removalMessage: String {
+        let chats = model.chatCount(of: record.id)
+        let key = "Its API key is deleted from the Keychain."
+        guard chats > 0 else { return key }
+        let count = chats == 1 ? "Its chat stays" : "Its \(chats) chats stay"
+        return "\(key) \(count) on this Mac and return if you add a server at \(model.address(of: record)) again. "
+            + "To change its key or certificate, use Edit Server instead."
+    }
 }
 
-/// Remote access to this Mac needs the server-side TLS listener and keys.
-struct RemoteAccessNote: View {
+/// Opens the Remote Access sheet of This Mac's server.
+struct RemoteAccessEntry: View {
+    let open: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Remote access is off").font(.system(size: 12, weight: .semibold))
-            Text("Other Macs cannot control this one yet. Remote access needs mirmir's TLS listener and API keys, which are planned but not released.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Remote access").font(.system(size: 12, weight: .semibold))
+                Text("Let other Macs and the mirmir CLI use this Mac's models over TLS with scoped API keys.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Remote Access…", action: open)
         }
         .padding(10)
         .background(Palette.raised, in: RoundedRectangle(cornerRadius: 8))
     }
 }
+
+#if DEBUG
+#Preview("Instance — This Mac", traits: .fixedLayout(width: 340, height: 700)) {
+    InstanceDetail(record: .thisMac).previewModel()
+}
+#Preview("Instance — needs update", traits: .fixedLayout(width: 340, height: 700)) {
+    let model = AppModel.preview()
+    InstanceDetail(record: model.instances[2]).previewModel(model)
+}
+#endif

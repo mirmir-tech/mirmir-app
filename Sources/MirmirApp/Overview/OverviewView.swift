@@ -30,12 +30,11 @@ struct OverviewView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            ToolbarItem { LoadModelMenu() }
         }
     }
 
     private var subtitle: String {
-        var parts: [String] = []
+        var parts = [model.currentInstance.name]
         if let loaded = model.primaryModel {
             parts.append(loaded.displayName)
             if !loaded.encoding.isEmpty { parts.append(loaded.encoding) }
@@ -59,7 +58,7 @@ struct KPIRow: View {
             tile("TTFT", Palette.muted, Format.seconds(fromMilliseconds: snapshot?.currentTTFTMs ?? snapshot?.lastTTFTMs), "s",
                  note: "mean \(Format.seconds(fromMilliseconds: snapshot?.meanTTFTMs)) s · \(Format.grouped(snapshot?.totalRequests ?? 0)) requests")
             tile("MEMORY", Palette.muted, snapshot?.memory.map { Format.gigabytes($0.usedBytes) } ?? "—", "GB",
-                 note: snapshot?.memory.map { "\(Format.percent($0.usedRatio))% of \(Format.gigabytes($0.totalBytes)) GB · \($0.source)" } ?? "not reported")
+                 note: snapshot?.memory.map { "\(Format.percent($0.usedRatio))% of \(Format.gigabytes($0.totalBytes)) GB · \($0.pool.label)" } ?? "not reported")
         }
     }
 
@@ -91,14 +90,14 @@ struct ThroughputChart: View {
             } else {
                 Chart {
                     ForEach(samples) { sample in
-                        AreaMark(x: .value("Time", sample.sampledAt), y: .value("tok/s", sample.decode ?? 0), series: .value("s", "decode-area"))
+                        AreaMark(x: .value("Time", sample.sampledAt), y: .value("tok/s", sample.liveDecode ?? 0), series: .value("s", "decode-area"))
                             .foregroundStyle(Palette.signal.opacity(0.12))
-                        LineMark(x: .value("Time", sample.sampledAt), y: .value("tok/s", sample.decode ?? 0), series: .value("s", "Decode"))
+                        LineMark(x: .value("Time", sample.sampledAt), y: .value("tok/s", sample.liveDecode ?? 0), series: .value("s", "Decode"))
                             .foregroundStyle(Palette.signal)
                             .lineStyle(StrokeStyle(lineWidth: 1.6))
                     }
-                    ForEach(samples.filter { $0.prefill != nil }) { sample in
-                        PointMark(x: .value("Time", sample.sampledAt), y: .value("tok/s", min(sample.prefill ?? 0, peakDecode * 1.5)))
+                    ForEach(samples.filter { $0.livePrefill != nil }) { sample in
+                        PointMark(x: .value("Time", sample.sampledAt), y: .value("tok/s", min(sample.livePrefill ?? 0, peakDecode * 1.5)))
                             .foregroundStyle(Palette.brass)
                             .symbolSize(10)
                     }
@@ -117,7 +116,7 @@ struct ThroughputChart: View {
     }
 
     /// Prefill rates dwarf decode; clamp the dots so decode stays readable.
-    private var peakDecode: Double { max(samples.compactMap(\.decode).max() ?? 1, 1) }
+    private var peakDecode: Double { max(samples.compactMap(\.liveDecode).max() ?? 1, 1) }
 
     /// Request counts share the decode axis, scaled so the peak count sits at
     /// a quarter of the peak decode rate.
@@ -136,7 +135,7 @@ struct MemoryChart: View {
                 Text("Memory").font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if let memory = samples.last?.memory {
-                    Text("\(memory.source) · limit \(Format.gigabytes(memory.totalBytes)) GB")
+                    Text("\(memory.pool.label) · limit \(Format.gigabytes(memory.totalBytes)) GB")
                         .font(.mono(11)).foregroundStyle(Palette.muted).lineLimit(1)
                 }
             }
@@ -183,3 +182,12 @@ struct RetentionNote: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("Overview", traits: .fixedLayout(width: 1070, height: 800)) {
+    NavigationStack { OverviewView() }.previewModel()
+}
+#Preview("Throughput chart, 1 h", traits: .sizeThatFitsLayout) {
+    ThroughputChart(samples: AppModel.preview().history.samples).frame(width: 640).padding()
+}
+#endif

@@ -44,8 +44,15 @@ public enum Format {
     }
 
     public static func relative(_ date: Date, now: Date = Date()) -> String {
+        #if canImport(Darwin)
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: now)
+        #else
+        // swift-corelibs-foundation has no RelativeDateTimeFormatter; this
+        // keeps MirmirKit building and testable on Linux.
+        let interval = now.timeIntervalSince(date)
+        return interval >= 0 ? "\(duration(interval)) ago" : "in \(duration(-interval))"
+        #endif
     }
 }

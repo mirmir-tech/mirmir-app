@@ -9,10 +9,13 @@ public final class AppModel {
     // Navigation shared by the window, menu bar and keyboard shortcuts.
     public var section: SidebarSection = .overview
     public var range: TimeRange = .hour
+    /// The Hugging Face download sheet on the Models screen, opened from the
+    /// screen's toolbar or the menu bar panel.
+    public var presentingDownload = false
 
     // Instances.
-    public private(set) var instances: [InstanceRecord]
-    public private(set) var currentInstanceID: UUID
+    public internal(set) var instances: [InstanceRecord]
+    public internal(set) var currentInstanceID: UUID
     public internal(set) var summaries: [UUID: InstanceSummary] = [:]
 
     // Connection and live data for the current instance.
@@ -22,6 +25,9 @@ public final class AppModel {
     public internal(set) var sparkline: [Double] = []
     public internal(set) var models: [LocalModel] = []
     public internal(set) var activeSelectors: [String] = []
+    /// Listed selector → the active selector serving it, resolved off the
+    /// main actor in `refreshModels`.
+    public internal(set) var servingSelectors: [String: String] = [:]
     public internal(set) var activities: [String: Activity] = [:]
     public internal(set) var inspections: [String: ModelInspection] = [:]
     public internal(set) var loads: [String: LoadProgress] = [:]
@@ -33,25 +39,51 @@ public final class AppModel {
 
     public let supervisor: ServerSupervisor
     public let chat: ChatController
+    /// Folders outside the container the user granted, for models.
+    public let modelFolders: ModelFolders
     let paths: SocketPaths
+    /// Deadlines of the unary calls on every connection the model opens.
+    let deadlines: CallDeadlines
+    let credentials: any CredentialStore
     let instanceFile = JSONFile<[InstanceRecord]>(name: "instances.json")
+    /// Removed remote servers whose chats are kept: adding a server at the
+    /// same address again gives it the removed one's identity and chats.
+    let removedInstanceFile = JSONFile<[InstanceRecord]>(name: "removed-instances.json")
+    var removedInstances: [InstanceRecord] = []
     var sessionTask: Task<Void, Never>?
     var probeTask: Task<Void, Never>?
     var refreshModelsSoon = false
     var lastStartError: String?
+    var lastActivityPrune = Date.distantPast
+    /// Previews: sample data that never reaches `instances.json`, and no
+    /// notices from calls the inert preview connection rejects.
+    var isPreview = false
 
-    public init(paths: SocketPaths = SocketPaths(), supervisor: ServerSupervisor = ServerSupervisor()) {
+    public init(
+        paths: SocketPaths = SocketPaths(),
+        supervisor: ServerSupervisor = ServerSupervisor(),
+        credentials: any CredentialStore = Credentials.platformDefault,
+        modelFolders: ModelFolders = ModelFolders(),
+        deadlines: CallDeadlines = .standard,
+        // Nil keeps chats in memory only (previews).
+        chats: ChatStore? = ChatStore(),
+        // False reads the saved chats in `start`, after an older copy of
+        // the app has quit and saved them.
+        loadsChatsNow: Bool = true
+    ) {
+        self.modelFolders = modelFolders
         self.paths = paths
+        self.deadlines = deadlines
+        self.credentials = credentials
         self.supervisor = supervisor
-        self.chat = ChatController()
+        self.chat = ChatController(store: chats, loadingNow: loadsChatsNow)
         var stored = instanceFile.load() ?? []
         stored.removeAll { $0.isThisMac }
-        if stored.isEmpty, SocketPaths.isSocket(InstanceTarget.systemSocket) {
-            stored.append(InstanceRecord(name: "System", target: .system))
-        }
         instances = [.thisMac] + stored
+        removedInstances = removedInstanceFile.load() ?? []
         currentInstanceID = InstanceRecord.thisMacID
         chat.model = self
+        chat.instanceChanged()
     }
 
     public var currentInstance: InstanceRecord {
@@ -60,9 +92,18 @@ public final class AppModel {
 
     public var connection: RuntimeConnection? { phase.connection }
 
+    /// Whether results of a call on `connection` belong on screen: it is
+    /// the current instance's open connection. Calls outlive a switch to
+    /// another server or a reconnect, so every per-server write that follows
+    /// an `await` checks this first; two servers can list the same selector.
+    func isCurrent(_ connection: RuntimeConnection) -> Bool {
+        phase.connection === connection
+    }
+
     /// Starts connecting to the current instance and probing the others.
     public func start() {
         guard sessionTask == nil else { return }
+        chat.loadHistory()
         connectCurrent()
         probeTask = Task { [weak self] in await self?.probeLoop() }
     }
@@ -70,22 +111,8 @@ public final class AppModel {
     public func select(instance id: UUID) {
         guard id != currentInstanceID, instances.contains(where: { $0.id == id }) else { return }
         currentInstanceID = id
+        chat.instanceChanged()
         connectCurrent()
-    }
-
-    public func add(_ record: InstanceRecord) {
-        instances.append(record)
-        persistInstances()
-        summaries[record.id] = .checking
-        Task { await probe(record) }
-    }
-
-    public func remove(instance id: UUID) {
-        guard id != InstanceRecord.thisMacID else { return }
-        instances.removeAll { $0.id == id }
-        summaries[id] = nil
-        persistInstances()
-        if currentInstanceID == id { select(instance: InstanceRecord.thisMacID) }
     }
 
     /// Stops the server this app started; an attached server is left alone.
@@ -97,13 +124,15 @@ public final class AppModel {
     public func resumeServer() {
         serverPaused = false
         if currentInstance.isThisMac, connection == nil {
-            supervisor.start()
+            startServer()
             connectCurrent()
         }
     }
 
-    /// Call from `applicationWillTerminate`.
+    /// Call from `applicationWillTerminate`. The streaming reply is saved
+    /// as stopped, and every chat save is on disk, before anything closes.
     public func shutdown() {
+        chat.terminate()
         sessionTask?.cancel()
         probeTask?.cancel()
         connection?.close()
@@ -125,16 +154,21 @@ public final class AppModel {
         sparkline = []
         models = []
         activeSelectors = []
+        servingSelectors = [:]
         activities = [:]
         inspections = [:]
         loads = [:]
+        transfers = [:]
     }
 
-    private func persistInstances() {
-        do {
-            try instanceFile.save(instances.filter { !$0.isThisMac })
-        } catch {
-            notice = "Could not save instances: \(error.localizedDescription)"
-        }
+    /// Shows a failed call as a notice. A call the app cancelled itself is
+    /// not a failure and is dropped.
+    /// A failure on a server that is no longer current names that server.
+    func report(_ error: any Error, _ context: String? = nil, from connection: RuntimeConnection? = nil) {
+        let error = ConnectionError.wrap(error)
+        if case .cancelled = error { return }
+        var message = context.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
+        if let connection, !isCurrent(connection) { message = "\(connection.address): \(message)" }
+        notice = message
     }
 }

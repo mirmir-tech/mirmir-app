@@ -8,7 +8,8 @@ struct LogsView: View {
     @State private var query = ""
 
     var body: some View {
-        let lines = model.supervisor.logs.lines.filter { query.isEmpty || $0.text.localizedCaseInsensitiveContains(query) }
+        let all = model.supervisor.logs.lines
+        let lines = query.isEmpty ? all : all.filter { $0.text.localizedCaseInsensitiveContains(query) }
         Group {
             if model.supervisor.logs.lines.isEmpty {
                 EmptyState(title: "No server output", message: emptyMessage, symbol: "doc.text")
@@ -34,6 +35,9 @@ struct LogsView: View {
             }
         }
         .navigationTitle("Logs")
+        // Only the server this app starts writes here, whichever server the
+        // other screens show.
+        .navigationSubtitle(InstanceRecord.thisMac.name)
         .searchable(text: $query, placement: .toolbar, prompt: "Filter")
         .toolbar {
             ToolbarItem {
@@ -44,8 +48,14 @@ struct LogsView: View {
 
     private var emptyMessage: String {
         if model.currentInstance.isThisMac, !model.supervisor.ownership.isRunning, model.connection != nil {
-            return "This Mac's server was started outside the app (CLI, TUI or launchd), so its output is not captured here."
+            return ServerSupervisor.unverifiedServerAdvice
         }
         return "Logs appear when the app starts mirmir on this Mac."
     }
 }
+
+#if DEBUG
+#Preview("Logs", traits: .fixedLayout(width: 1070, height: 600)) {
+    NavigationStack { LogsView() }.previewModel()
+}
+#endif
