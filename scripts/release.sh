@@ -105,12 +105,17 @@ step "Checking the bundled runtime"
 # The helper inherits the app's sandbox, so it runs only as the app's child
 # (alone it traps); check the binary instead of running it.
 lipo -archs "$app/Contents/Helpers/mirmir" | grep -qx arm64 || { echo "error: the bundled mirmir is not arm64" >&2; exit 1; }
+# Neither a linked library nor a run path may name the build machine: every
+# LC_RPATH is relative to the bundle (@executable_path, @loader_path).
 while IFS= read -r -d '' file; do
-    if file -b "$file" | grep -q "Mach-O" && otool -L "$file" | tail -n +2 | grep -q "/Users/"; then
+    file -b "$file" | grep -q "Mach-O" || continue
+    if otool -L "$file" | tail -n +2 | grep -q "/Users/"; then
         echo "error: $file links a library on this machine:" >&2
         otool -L "$file" | grep "/Users/" >&2
         exit 1
     fi
+    leaked="$(otool -l "$file" | awk '/cmd LC_RPATH/ { getline; getline; print $2 }' | grep -v '^@' || true)"
+    [[ -z "$leaked" ]] || fail "$file keeps a run path outside the bundle: $leaked"
 done < <(find "$app/Contents" -type f -print0)
 lipo -archs "$app/Contents/MacOS/Mirmir" | grep -qx arm64 || { echo "error: the app is not arm64 only" >&2; exit 1; }
 
@@ -130,7 +135,11 @@ if [[ -d "/Volumes/$volume" ]]; then hdiutil detach "/Volumes/$volume" -force -q
 size_mb=$(( $(du -sm "$staging" | cut -f1) + 40 ))
 hdiutil create -quiet -volname "$volume" -srcfolder "$staging" -fs HFS+ -format UDRW -size "${size_mb}m" -ov "$work/rw.dmg"
 device="$(hdiutil attach "$work/rw.dmg" -readwrite -noverify -noautoopen 2>/dev/null | awk '/Apple_HFS/ {print $1}')"
+# Exactly one /dev/diskN or /dev/diskNsM, or the layout and detach below
+# would act on nothing, or on another disk.
+[[ "$device" =~ ^/dev/disk[0-9]+(s[0-9]+)?$ ]] || fail "attaching the disk image gave no single device (got '$device')"
 mount="/Volumes/$volume"
+[[ -d "$mount" ]] || fail "the disk image is not mounted at $mount"
 
 # Finder's bounds are the whole window; make the content area exactly the
 # background's 660×400 pt.
@@ -172,10 +181,15 @@ SetFile -c icnC "$mount/.VolumeIcon.icns"
 SetFile -a C "$mount"
 chmod -Rf go-w "$mount" 2>/dev/null || true
 sync
+# Converting an image that is still mounted read-write can capture it
+# half-written: fail when the last attempt did not unmount it.
+detached=false
 for attempt in 1 2 3 4 5; do
-    hdiutil detach "$device" -quiet && break
+    if hdiutil detach "$device" -quiet; then detached=true; break; fi
+    echo "unmounting $device failed (attempt $attempt of 5)" >&2
     sleep 2
 done
+$detached || fail "could not unmount $device ($mount); eject it and run again"
 
 dmg="$out/Mirmir-$version.dmg"
 rm -f "$dmg"
