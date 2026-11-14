@@ -145,4 +145,32 @@ struct ChatHistoryTests {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: store.file.url.path)
         #expect(try Data(contentsOf: store.file.url) == original)
     }
+
+    /// The app reads its chats only after an older copy has quit and saved
+    /// them; a chat started meanwhile is kept with them.
+    @Test func chatsReadLaterKeepWhatAnOlderCopySavedMeanwhile() throws {
+        let directory = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ChatStore(directory: directory)
+        try store.file.save([Self.conversation("Before")])
+        let model = AppModel(
+            paths: SocketPaths(environment: ["HOME": directory.path, "MIRMIR_STATE_HOME": directory.path]),
+            supervisor: ServerSupervisor(logFile: directory.appendingPathComponent("server.log")),
+            credentials: MemoryCredentials(),
+            modelFolders: ModelFolders(file: JSONFile(name: "model-folders.json", directory: directory)),
+            chats: store, loadsChatsNow: false
+        )
+        #expect(model.chat.conversations.isEmpty)
+        let early = model.chat.newConversation(model: "m")
+        model.chat.flushSaves()
+        // The older copy saves on its way out; nothing here wrote over it.
+        try store.file.save([Self.conversation("Before"), Self.conversation("Older copy's last")])
+
+        model.chat.loadHistory()
+        #expect(Set(model.chat.conversations.map(\.title)) == ["Before", "Older copy's last", "New Chat"])
+        model.chat.flushSaves()
+        let saved = store.load().conversations
+        #expect(saved.count == 3)
+        #expect(saved.contains { $0.id == early })
+    }
 }

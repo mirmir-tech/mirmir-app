@@ -66,14 +66,17 @@ public final class AppModel {
         modelFolders: ModelFolders = ModelFolders(),
         deadlines: CallDeadlines = .standard,
         // Nil keeps chats in memory only (previews).
-        chats: ChatStore? = ChatStore()
+        chats: ChatStore? = ChatStore(),
+        // False reads the saved chats in `start`, after an older copy of
+        // the app has quit and saved them.
+        loadsChatsNow: Bool = true
     ) {
         self.modelFolders = modelFolders
         self.paths = paths
         self.deadlines = deadlines
         self.credentials = credentials
         self.supervisor = supervisor
-        self.chat = ChatController(store: chats)
+        self.chat = ChatController(store: chats, loadingNow: loadsChatsNow)
         var stored = instanceFile.load() ?? []
         stored.removeAll { $0.isThisMac }
         instances = [.thisMac] + stored
@@ -100,6 +103,7 @@ public final class AppModel {
     /// Starts connecting to the current instance and probing the others.
     public func start() {
         guard sessionTask == nil else { return }
+        chat.loadHistory()
         connectCurrent()
         probeTask = Task { [weak self] in await self?.probeLoop() }
     }

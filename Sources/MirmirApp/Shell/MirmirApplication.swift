@@ -36,7 +36,9 @@ enum WindowID {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = AppModel()
+    /// Its chats are read in `start`, once an older copy has quit and
+    /// saved its own; reading them earlier would save over those.
+    let model = AppModel(loadsChatsNow: false)
     private var signalSources: [any DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {

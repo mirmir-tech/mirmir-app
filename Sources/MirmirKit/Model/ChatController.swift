@@ -45,12 +45,16 @@ public final class ChatController {
     /// What each conversation's composer holds until it is sent.
     public internal(set) var drafts: [UUID: ComposerDraft] = [:]
 
-    init(store: ChatStore?) {
-        let history = store?.load() ?? ChatHistory()
+    /// Whether the saved chats were read; until then nothing is saved, so
+    /// the file another copy of the app may still write is not replaced.
+    @ObservationIgnored var historyLoaded = false
+
+    /// `loadingNow` false waits for `loadHistory`, as the app does until an
+    /// older copy of itself has quit and saved its chats.
+    init(store: ChatStore?, loadingNow: Bool = true) {
         self.store = store
-        loadIssue = history.issue
-        conversations = history.conversations.map(Self.settled).sorted { $0.updatedAt > $1.updatedAt }
-        selectedID = conversations.first?.id
+        conversations = []
+        if loadingNow { loadHistory() }
     }
 
     /// The current server's conversations; the others stay saved for when

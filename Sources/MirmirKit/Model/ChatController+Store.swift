@@ -6,8 +6,24 @@ extension ChatController {
     /// the saved chats could not be read or copied aside, so the file is
     /// never written over.
     var savingStore: ChatStore? {
+        guard historyLoaded else { return nil }
         if case .notSaved = loadIssue { return nil }
         return store
+    }
+
+    /// Reads the saved chats, once. Chats started before, while an older
+    /// copy of the app was quitting, are kept with them and saved.
+    public func loadHistory() {
+        guard !historyLoaded else { return }
+        historyLoaded = true
+        let history = store?.load() ?? ChatHistory()
+        loadIssue = history.issue
+        let started = conversations
+        conversations = (started + history.conversations.map(Self.settled)).sorted { $0.updatedAt > $1.updatedAt }
+        if selectedID == nil {
+            selectedID = model == nil ? conversations.first?.id : visibleConversations.first?.id
+        }
+        if !started.isEmpty { persist() }
     }
 
     /// Dismisses a load issue that was news. One that holds for the whole
@@ -21,7 +37,8 @@ extension ChatController {
     func persist() {
         guard let store = savingStore else {
             // Not previews: a session that leaves unreadable history alone.
-            if store != nil { hasUnsavedChanges = true }
+            // Before the history is read, `loadHistory` saves what changed.
+            if store != nil, case .notSaved = loadIssue { hasUnsavedChanges = true }
             return
         }
         saveGeneration += 1
