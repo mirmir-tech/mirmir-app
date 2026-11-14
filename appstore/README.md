@@ -60,16 +60,11 @@ Locales: `en-US` (primary) and `pl`.
 
 ### Should be fixed (not blocking, cheap)
 
-- Add `PrivacyInfo.xcprivacy` to `Resources/` and to the Mirmir target's
-  Copy Bundle Resources (Resources is not a synchronized folder). It declares
-  no tracking, no collected data and the file-timestamp reads of the helper.
-- `NSHumanReadableCopyright` is `Apache-2.0`; the About panel shows it as
-  the copyright line. Use `© 2026 Bazyli Zygan. Apache License 2.0.` (or the
-  legal name of the developer account).
-- Done (14 Nov 2026): Settings → Server edits the bundled server's
+- Done (14 Nov 2026): Configuration (Cmd-7) edits the current server's
   configuration (Hugging Face token, HTTP API key, server and runtime
   settings) through `GetConfiguration`/`UpdateConfiguration`; the gated-model
-  tooltip points there; "1 instances" is singular.
+  tooltip points there; "1 instances" is singular. `Resources/PrivacyInfo.xcprivacy`
+  is in the target, and the copyright line reads `© 2026 Bazyli Zygan`.
 - Recapture screenshots from the App Store build: the Instances capture shows
   the CLI socket `~/.local/state/mirmir/mirmir.sock`, so it is not the
   sandboxed app. A Models screen and a listed remote server would also help.
