@@ -126,7 +126,7 @@ struct ServerToggle: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if model.supervisor.ownership.isRunning {
+        if model.supervisor.ownership.isStarting {
             Button { model.pauseServer() } label: { Label("Pause Server", systemImage: "pause.fill") }
                 .controlSize(.small)
         } else if model.currentInstance.isThisMac, model.connection == nil {
@@ -136,7 +136,7 @@ struct ServerToggle: View {
             Button {} label: { Label("Pause Server", systemImage: "pause.fill") }
                 .controlSize(.small)
                 .disabled(true)
-                .help("This server was started by an earlier run of the app. Quit and reopen Mirmir to restart it.")
+                .help(ServerSupervisor.unverifiedServerAdvice)
         }
     }
 }

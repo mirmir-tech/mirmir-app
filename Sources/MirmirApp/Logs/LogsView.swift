@@ -48,7 +48,7 @@ struct LogsView: View {
 
     private var emptyMessage: String {
         if model.currentInstance.isThisMac, !model.supervisor.ownership.isRunning, model.connection != nil {
-            return "This Mac's server was started by an earlier run of the app, so its output is not captured here. Quit and reopen Mirmir to restart it."
+            return ServerSupervisor.unverifiedServerAdvice
         }
         return "Logs appear when the app starts mirmir on this Mac."
     }

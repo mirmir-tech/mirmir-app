@@ -13,6 +13,11 @@ extension AppModel {
                 let connection = try await open(instance)
                 guard !Task.isCancelled else { connection.close(); return }
                 startedAt = nil
+                if instance.isThisMac, case .none = supervisor.ownership, let socket = paths.socket(for: .personal) {
+                    // A server an earlier run left behind is this app's to
+                    // pause and restart once it is verified as its helper.
+                    await supervisor.recover(serving: socket)
+                }
                 phase = .connected(connection)
                 summaries[instance.id] = InstanceSummary(status: .online(connection.health), telemetry: nil, loadedModels: [])
                 let lost = await runConnected(connection, instance: instance)
@@ -25,6 +30,11 @@ extension AppModel {
                 if Task.isCancelled { return }
                 if shouldStartServer(for: instance, after: error, startedAt: startedAt) {
                     startServer()
+                    startedAt = Date()
+                } else if instance.isThisMac, startedAt == nil, supervisor.ownership.isStarting {
+                    // Started by Resume, a restart or the first-launch
+                    // configuration rather than by this session: it is
+                    // still starting, not offline.
                     startedAt = Date()
                 }
                 if let startedAt, waitingForServer(since: startedAt) {
@@ -50,11 +60,11 @@ extension AppModel {
         // recovers it, so start the server for any unreachable error.
         guard instance.isThisMac, !serverPaused, startedAt == nil, error.isUnreachable else { return false }
         if case .unavailable = supervisor.ownership { return false }
-        return !supervisor.ownership.isRunning
+        return !supervisor.ownership.isStarting
     }
 
     private func waitingForServer(since start: Date) -> Bool {
-        supervisor.ownership.isRunning && Date().timeIntervalSince(start) < Self.serverStartTimeout
+        supervisor.ownership.isStarting && Date().timeIntervalSince(start) < Self.serverStartTimeout
     }
 
     /// Polls telemetry and models while watching activity. Returns the

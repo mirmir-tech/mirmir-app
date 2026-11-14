@@ -5,7 +5,11 @@ import Observation
 public enum ServerOwnership: Hashable, Sendable {
     /// Nothing started by this app; a server may still be attached.
     case none
-    /// `mirmir serve` launched by this app and still running.
+    /// The first launch writes the server's configuration; `mirmir serve`
+    /// starts when it is done.
+    case configuring
+    /// `mirmir serve` launched by this app, or the app's own helper left
+    /// running by an earlier run and recovered, and still running.
     case running(pid: Int32, binary: String)
     /// The owned process exited.
     case exited(status: Int32)
@@ -15,6 +19,15 @@ public enum ServerOwnership: Hashable, Sendable {
     public var isRunning: Bool {
         if case .running = self { true } else { false }
     }
+
+    /// Whether the app's server is running or about to: a connection that
+    /// fails now is the server still starting, not the server missing.
+    public var isStarting: Bool {
+        switch self {
+        case .configuring, .running: true
+        case .none, .exited, .unavailable: false
+        }
+    }
 }
 
 /// Starts and stops the personal `mirmir serve` process the app owns. A server
@@ -22,10 +35,13 @@ public enum ServerOwnership: Hashable, Sendable {
 @MainActor
 @Observable
 public final class ServerSupervisor {
-    public private(set) var ownership: ServerOwnership = .none
+    public internal(set) var ownership: ServerOwnership = .none
     public let logs: LogBuffer
     private let tail: LogTail
     private var process: Process?
+    /// Watches the exit of a recovered server, which is not this app's
+    /// child (`ServerSupervisor+Recovery`).
+    @ObservationIgnored var recovered: (any DispatchSourceProcess)?
 
     public init(logs: LogBuffer = LogBuffer(), logFile: URL = LogTail.defaultURL) {
         self.logs = logs
@@ -40,13 +56,12 @@ public final class ServerSupervisor {
     /// it runs next to a mirmir CLI server, or anything else, on mirmir's
     /// default 8080.
     public nonisolated static let httpBind = "127.0.0.1:18080"
-    private var configuring = false
 
     /// Starts the bundled server. `environment` adds variables to the app's
     /// own, such as `HF_HUB_CACHE` for a Hugging Face cache the user granted.
     /// The first start writes the server's configuration with the app's port.
     public func start(environment: [String: String] = [:]) {
-        guard !ownership.isRunning, !configuring else { return }
+        guard !ownership.isStarting else { return }
         guard let binary = ServerBinary.resolve() else {
             ownership = .unavailable(reason: "This build of Mirmir does not include its server (Contents/Helpers/mirmir).")
             logs.note("bundled mirmir not found")
@@ -65,16 +80,18 @@ public final class ServerSupervisor {
         setup.standardError = FileHandle.nullDevice
         setup.terminationHandler = { [weak self] _ in
             Task { @MainActor in
-                self?.configuring = false
-                self?.launch(binary, environment: environment)
+                // Stopped while configuring: the server is not started.
+                guard let self, case .configuring = self.ownership else { return }
+                self.ownership = .none
+                self.launch(binary, environment: environment)
             }
         }
         do {
-            configuring = true
+            ownership = .configuring
             try setup.run()
             logs.note("configuring the bundled server: HTTP API at \(Self.httpBind)")
         } catch {
-            configuring = false
+            ownership = .none
             launch(binary, environment: environment)
         }
     }
@@ -112,20 +129,35 @@ public final class ServerSupervisor {
         }
     }
 
-    /// Sends SIGTERM; mirmir shuts its listeners down gracefully.
+    /// Sends SIGTERM; mirmir shuts its listeners down gracefully. While the
+    /// first launch is still configuring, the server is not started.
     public func stop() {
-        guard let process, process.isRunning else { return }
-        logs.note("stopping server (pid \(process.processIdentifier))")
-        process.terminate()
+        if case .configuring = ownership { ownership = .none }
+        guard let pid = runningPID else { return }
+        logs.note("stopping server (pid \(pid))")
+        kill(pid, SIGTERM)
     }
 
     /// Blocks briefly so quitting the app does not orphan the server.
     public func stopAndWait(timeout: TimeInterval = 10) {
-        guard let process, process.isRunning else { return }
-        process.terminate()
+        if case .configuring = ownership { ownership = .none }
+        guard let pid = runningPID else { return }
+        kill(pid, SIGTERM)
         let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning && Date() < deadline { usleep(50_000) }
-        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+        while isAlive(pid) && Date() < deadline { usleep(50_000) }
+        if isAlive(pid) { kill(pid, SIGKILL) }
+    }
+
+    /// The server this app runs: its child, or a recovered helper.
+    private var runningPID: Int32? {
+        if let process { return process.isRunning ? process.processIdentifier : nil }
+        if case .running(let pid, _) = ownership, isAlive(pid) { return pid }
+        return nil
+    }
+
+    private func isAlive(_ pid: Int32) -> Bool {
+        if let process, process.processIdentifier == pid { return process.isRunning }
+        return kill(pid, 0) == 0
     }
 
     private func exited(status: Int32) {

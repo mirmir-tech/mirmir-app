@@ -93,7 +93,8 @@ struct SettingsView: View {
 
     private var ownership: String {
         switch model.supervisor.ownership {
-        case .none: model.connection == nil ? "Not running" : "Running"
+        case .none: model.connection == nil ? "Not running" : "Running, not started by this run of Mirmir"
+        case .configuring: "Configuring the first launch"
         case .running(let pid, _): "Running (pid \(pid))"
         case .exited(let status): "Exited with status \(status)"
         case .unavailable(let reason): reason
