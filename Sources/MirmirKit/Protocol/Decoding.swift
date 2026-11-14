@@ -150,7 +150,8 @@ extension ModelInspection {
             hasOverrides: wire.hasMirmirOverrides_p,
             memory: wire.hasMemory ? MemoryEstimate(wire.memory) : nil,
             task: wire.task,
-            maxInputTokens: wire.capabilities.maxInputTokens
+            maxInputTokens: wire.capabilities.maxInputTokens,
+            context: wire.hasContext ? ModelContext(wire.context) : nil
         )
     }
 }

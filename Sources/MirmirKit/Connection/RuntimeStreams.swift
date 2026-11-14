@@ -6,12 +6,16 @@ import MirmirRPC
 // calling task cancels the RPC, which the server observes as a disconnect.
 
 extension RuntimeConnection {
+    /// Loads a model; a given `context` is saved for it first. Without one
+    /// the server uses the saved context.
     public func load(
         selector: String,
+        context: ContextChoice? = nil,
         onProgress: @escaping @Sendable (LoadProgress) async -> Void
     ) async throws(ConnectionError) {
         var request = Mirmir_V1_LoadModelRequest()
         request.selector = selector
+        if let context { request.context = context.wire }
         try await stream {
             try await runtime.loadModel(request) { response in
                 for try await event in response.messages {

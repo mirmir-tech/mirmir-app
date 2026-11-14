@@ -111,7 +111,12 @@ struct ModelsView: View {
                 .width(min: 120, ideal: 170)
             TableColumn("Size") { local in Text(Format.bytes(local.sizeBytes)).font(.mono(12)) }
                 .width(80)
-            TableColumn("Status") { local in ModelStatus(local: local) }
+            TableColumn("Status") { local in
+                ModelStatus(
+                    load: model.loads[local.selector], download: model.download(of: local),
+                    loadability: local.loadability, state: model.displayState(of: local)
+                )
+            }
                 .width(min: 120, ideal: 170)
         }
         .alternatingRowBackgrounds(.disabled)
@@ -124,24 +129,38 @@ struct ModelsView: View {
     }
 }
 
+/// A model's status cell. It takes its values from the table rather than
+/// reading AppModel from the environment: AppKit can lay out a table cell
+/// whose row is going away (a removed or reordered model) outside the
+/// view's environment, and an environment read there traps.
 struct ModelStatus: View {
-    @Environment(AppModel.self) private var model
-    let local: LocalModel
+    let load: LoadProgress?
+    let download: ModelDownload?
+    let loadability: Loadability
+    let state: LocalModelState
 
     var body: some View {
-        if let load = model.loads[local.selector] {
-            HStack(spacing: 6) {
-                if let fraction = load.fraction {
-                    ProgressView(value: fraction).frame(width: 60)
-                } else {
-                    ProgressView().controlSize(.small)
-                }
-                Text(load.phase.replacingOccurrences(of: "_", with: " ")).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-        } else if case .unavailable(let reason) = local.loadability {
+        if let load {
+            progress(load.fraction, label: load.phase.replacingOccurrences(of: "_", with: " "))
+        } else if let download {
+            // A partial checkpoint is not loadable yet; while its download
+            // runs that is progress, not a failure.
+            progress(download.fraction, label: "Downloading")
+        } else if case .unavailable(let reason) = loadability {
             Pill(text: reason.isEmpty ? "Unsupported" : reason, color: Palette.danger).help(reason).lineLimit(1)
         } else {
-            Pill(text: model.displayState(of: local).label, color: model.displayState(of: local).color)
+            Pill(text: state.label, color: state.color)
+        }
+    }
+
+    private func progress(_ fraction: Double?, label: String) -> some View {
+        HStack(spacing: 6) {
+            if let fraction {
+                ProgressView(value: fraction).frame(width: 60)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
         }
     }
 }

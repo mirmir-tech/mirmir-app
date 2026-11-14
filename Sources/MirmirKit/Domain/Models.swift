@@ -123,6 +123,8 @@ public struct ModelInspection: Hashable, Sendable {
     public let memory: MemoryEstimate?
     public let task: String
     public let maxInputTokens: UInt64
+    /// The context the model can be given; nil hides the control.
+    public let context: ModelContext?
 }
 
 /// Progress of a load, decoded from `ModelLifecycleEvent`.

@@ -197,16 +197,23 @@ extension RuntimeConnection {
         }
     }
 
-    public func inspect(selector: String) async throws(ConnectionError) -> ModelInspection {
+    /// The model's saved settings and context, with a memory estimate for
+    /// `context` when given, else for the saved context.
+    public func inspect(selector: String, context: ContextChoice? = nil) async throws(ConnectionError) -> ModelInspection {
         var request = Mirmir_V1_InspectModelRequest()
         request.selector = selector
+        if let context { request.context = context.wire }
         return try await call(.discovery) { options in ModelInspection(try await runtime.inspectModel(request, options: options)) }
     }
 
-    public func updateSettings(selector: String, settings: GenerationSettings) async throws(ConnectionError) {
+    /// Saves generation defaults, a context for the next load, or both.
+    public func updateSettings(
+        selector: String, settings: GenerationSettings?, context: ContextChoice? = nil
+    ) async throws(ConnectionError) {
         var request = Mirmir_V1_UpdateModelGenerationRequest()
         request.selector = selector
-        request.settings = settings.wire
+        if let settings { request.settings = settings.wire }
+        if let context { request.context = context.wire }
         _ = try await call(.management) { options in try await runtime.updateModelGeneration(request, options: options) }
     }
 

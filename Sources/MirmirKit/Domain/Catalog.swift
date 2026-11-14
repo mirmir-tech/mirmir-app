@@ -34,6 +34,13 @@ public enum TransferPhase: Hashable, Sendable {
     }
 }
 
+/// A download of a listed model's repository that is still running. Until it
+/// finishes the checkpoint is incomplete, which is progress, not an error.
+public struct ModelDownload: Hashable, Sendable {
+    /// Downloaded share of the repository, when its size is known.
+    public let fraction: Double?
+}
+
 public struct TransferProgress: Hashable, Sendable {
     public let repoID: String
     public let phase: TransferPhase

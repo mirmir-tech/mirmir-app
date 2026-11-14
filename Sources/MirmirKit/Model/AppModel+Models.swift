@@ -37,6 +37,15 @@ extension AppModel {
         activeSelector(for: local) != nil ? .loaded : local.state
     }
 
+    /// The running download of the model's repository: one this app started,
+    /// or a server pull from any client, such as the CLI.
+    public func download(of local: LocalModel) -> ModelDownload? {
+        guard !local.repoID.isEmpty else { return nil }
+        if let transfer = transfers[local.repoID] { return ModelDownload(fraction: transfer.fraction) }
+        let pull = activities.values.first { $0.kind == .pull && $0.target == local.repoID && $0.state.isActive }
+        return pull.map { ModelDownload(fraction: $0.progress?.fraction) }
+    }
+
     /// The selector to send for generation and unload: the one the server
     /// reports as active when it differs from the listed selector.
     public func servingSelector(for local: LocalModel) -> String {
@@ -81,57 +90,6 @@ extension AppModel {
         return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
-    public func load(_ selector: String) {
-        guard let connection else { return }
-        loads[selector] = LoadProgress(phase: "queued", current: 0, total: nil, detail: "", finished: false)
-        Task {
-            do {
-                try await connection.load(selector: selector) { progress in
-                    await self.setLoad(selector, progress, from: connection)
-                }
-            } catch {
-                report(error, "Loading \(selector) failed", from: connection)
-            }
-            if isCurrent(connection) { loads[selector] = nil }
-            try? await refreshModels(connection)
-        }
-    }
-
-    public func unload(_ selector: String) {
-        guard let connection else { return }
-        Task {
-            do {
-                _ = try await connection.unload(selector: selector)
-            } catch {
-                report(error, "Unloading \(selector) failed", from: connection)
-            }
-            if isCurrent(connection) { inspections[selector] = nil }
-            try? await refreshModels(connection)
-        }
-    }
-
-    public func inspect(_ selector: String) async {
-        guard let connection else { return }
-        do {
-            let inspection = try await connection.inspect(selector: selector)
-            if isCurrent(connection) { inspections[selector] = inspection }
-        } catch {
-            guard !isPreview else { return }
-            report(error, "Inspecting \(selector) failed", from: connection)
-        }
-    }
-
-    public func updateSettings(_ selector: String, _ settings: GenerationSettings) async {
-        guard let connection else { return }
-        do {
-            try await connection.updateSettings(selector: selector, settings: settings)
-            let inspection = try await connection.inspect(selector: selector)
-            if isCurrent(connection) { inspections[selector] = inspection }
-        } catch {
-            report(error, "Saving settings failed", from: connection)
-        }
-    }
-
     public func search(_ query: String) async throws(ConnectionError) -> [CatalogModel] {
         guard let connection else { throw .noServer(socket: currentInstance.name) }
         return try await connection.search(query: query)
@@ -168,10 +126,6 @@ extension AppModel {
     public func cancel(_ activity: Activity) {
         guard let connection, activity.cancellable else { return }
         Task { _ = try? await connection.cancel(operationID: activity.id) }
-    }
-
-    func setLoad(_ selector: String, _ progress: LoadProgress, from connection: RuntimeConnection) {
-        if isCurrent(connection) { loads[selector] = progress }
     }
 
     func setTransfer(_ repoID: String, _ progress: TransferProgress, from connection: RuntimeConnection) {
