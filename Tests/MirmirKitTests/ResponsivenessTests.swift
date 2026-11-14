@@ -42,9 +42,17 @@ struct ResponsivenessTests {
             loadability: .loadable, modelClass: "", encoding: "", container: "", sizeBytes: 0, features: [],
             imageInput: false, managed: false, recentRank: nil
         )
-        let serving = AppModel.servingSelectors(models: [models[0], viaLink], active: [models[0].selector, real.path])
+        let serving = AppModel.servingSelectors(
+            models: [models[0], viaLink], active: [models[0].selector, real.path], resolvingPaths: true
+        )
         #expect(serving[models[0].selector] == models[0].selector)
         #expect(serving[link.path] == real.path)
+        // A remote server's paths are not on this Mac: never resolved here.
+        let remote = AppModel.servingSelectors(
+            models: [models[0], viaLink], active: [models[0].selector, real.path], resolvingPaths: false
+        )
+        #expect(remote[models[0].selector] == models[0].selector)
+        #expect(remote[link.path] == nil)
     }
 
     @MainActor @Test func previewConnectionFailsImmediately() async {

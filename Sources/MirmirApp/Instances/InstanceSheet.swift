@@ -1,17 +1,24 @@
 import MirmirKit
 import SwiftUI
 
-/// Adds a remote server and tests it before saving, step by step: its
-/// certificate fingerprint first, shown for comparison before any key is
-/// sent, then the key and protocol. The sandboxed app reaches no other local
-/// socket than its bundled server's, so remote servers are the only kind.
-struct AddInstanceSheet: View {
+/// Adds a remote server, or edits a saved one in place, and tests it before
+/// saving, step by step: its certificate fingerprint first, shown for
+/// comparison before any key is sent, then the key and protocol. An edit
+/// keeps the server's identity, so its chats stay with it. The sandboxed app
+/// reaches no other local socket than its bundled server's, so remote
+/// servers are the only kind.
+struct InstanceSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var address = ""
+    /// The saved server being edited; nil adds a new one.
+    private let editing: InstanceRecord?
+    @State private var name: String
+    @State private var address: String
+    /// A new API key; empty keeps the saved one when editing.
     @State private var key = ""
-    @State private var caIssued = false
+    /// The edited server's saved key, read from the Keychain once.
+    @State private var savedKey: String?
+    @State private var caIssued: Bool
     @State private var presented: CertificateFingerprint?
     @State private var trusted = false
     @State private var test: RemoteTestResult?
@@ -20,9 +27,16 @@ struct AddInstanceSheet: View {
     @State private var testRun = 0
     @State private var testing = false
 
+    init(editing: InstanceRecord? = nil) {
+        self.editing = editing
+        _name = State(initialValue: editing?.name ?? "")
+        _address = State(initialValue: editing?.endpoint?.address ?? "")
+        _caIssued = State(initialValue: editing.map { $0.endpoint?.pinnedFingerprint == nil } ?? false)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Add Server").font(.system(size: 15, weight: .semibold))
+            Text(editing == nil ? "Add Server" : "Edit Server").font(.system(size: 15, weight: .semibold))
             Form {
                 TextField("Name", text: $name, prompt: Text(defaultName))
                 remoteFields
@@ -37,25 +51,34 @@ struct AddInstanceSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(test == nil ? "Test Connection" : "Test Again", action: runTest)
-                    .disabled(RemoteEndpoint(address: address) == nil || testing || key.isEmpty)
-                Button("Add Server", action: add)
+                    .disabled(RemoteEndpoint(address: address) == nil || testing || effectiveKey.isEmpty)
+                Button(editing == nil ? "Add Server" : "Save", action: save)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!canAdd)
+                    .disabled(!canSave)
             }
         }
         .padding(20)
         .frame(width: 560)
         .background(Palette.canvas)
+        .task { if let editing { savedKey = model.savedKey(for: editing.id) } }
     }
 
     @ViewBuilder private var remoteFields: some View {
         TextField("Address", text: $address, prompt: Text("server.local:7443")).font(.mono(12))
-        SecureField("API key", text: $key, prompt: Text("mmk_…")).font(.mono(12))
+        SecureField("API key", text: $key, prompt: Text(editing == nil ? "mmk_…" : "Unchanged")).font(.mono(12))
         Toggle("The server uses a CA-issued certificate", isOn: $caIssued)
         if !caIssued, let presented {
             VStack(alignment: .leading, spacing: 6) {
                 Text("CERTIFICATE SHA-256").sectionLabel(Palette.brass)
                 Text(presented.hex).font(.mono(11)).textSelection(.enabled)
+                if let previous = editing?.endpoint?.pinnedFingerprint {
+                    if previous == presented {
+                        Text("The certificate trusted before.").font(.system(size: 11)).foregroundStyle(Palette.success)
+                    } else {
+                        Text("Differs from the certificate trusted before, \(previous.hex).")
+                            .font(.system(size: 11)).foregroundStyle(Palette.warning)
+                    }
+                }
                 Text("Compare it with `mirmir remote status` on the server before trusting it. A later certificate change is refused.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                 Toggle("Trust this certificate", isOn: $trusted)
@@ -88,9 +111,15 @@ struct AddInstanceSheet: View {
         RemoteEndpoint(address: address)?.host.split(separator: ".").first.map(String.init) ?? "Remote"
     }
 
+    /// The key a test sends: the one typed, else the saved one of the
+    /// server being edited.
+    private var effectiveKey: String {
+        key.isEmpty ? savedKey ?? "" : key
+    }
+
     /// The current inputs, with the certificate the user trusted, if any.
     private var candidate: RemoteCandidate? {
-        RemoteCandidate(address: address, key: key, pinned: caIssued ? nil : (trusted ? presented : nil))
+        RemoteCandidate(address: address, key: effectiveKey, pinned: caIssued ? nil : (trusted ? presented : nil))
     }
 
     /// A remote server is saved only after a test passed with exactly these
@@ -99,12 +128,30 @@ struct AddInstanceSheet: View {
         test?.approved(for: candidate, testing: testing)
     }
 
-    private var canAdd: Bool { approved != nil }
+    /// An edit that changes only the name keeps the tested connection.
+    private var renamesOnly: Bool {
+        guard let editing, let saved = editing.endpoint, key.isEmpty, !testing,
+              let typed = RemoteEndpoint(address: address)
+        else { return false }
+        return typed.address == saved.address && caIssued == (saved.pinnedFingerprint == nil)
+    }
 
-    private func add() {
-        guard let approved else { return }
-        let record = InstanceRecord(name: name.isEmpty ? defaultName : name, target: .remote(approved.endpoint))
-        model.add(record, key: approved.key)
+    private var canSave: Bool { approved != nil || renamesOnly }
+
+    private func save() {
+        let title = name.isEmpty ? defaultName : name
+        if let editing {
+            if let approved {
+                model.update(
+                    InstanceRecord(id: editing.id, name: title, target: .remote(approved.endpoint)),
+                    key: key.isEmpty ? nil : approved.key
+                )
+            } else if renamesOnly {
+                model.update(InstanceRecord(id: editing.id, name: title, target: editing.target))
+            }
+        } else if let approved {
+            model.add(InstanceRecord(name: title, target: .remote(approved.endpoint)), key: approved.key)
+        }
         dismiss()
     }
 
@@ -145,5 +192,11 @@ struct AddInstanceSheet: View {
                 if current() { test = RemoteTestResult(candidate: candidate, outcome: .failed(error.localizedDescription)) }
             }
         }
+    }
+}
+
+private extension InstanceRecord {
+    var endpoint: RemoteEndpoint? {
+        if case .remote(let endpoint) = target { endpoint } else { nil }
     }
 }

@@ -52,11 +52,17 @@ extension AppModel {
         servingSelectors[local.selector]
     }
 
-    /// Pairs each listed model with the active selector serving it. Touches
-    /// the file system, so call it off the main actor.
-    nonisolated static func servingSelectors(models: [LocalModel], active: [String]) -> [String: String] {
+    /// Pairs each listed model with the active selector serving it. Paths
+    /// are compared through their symlinks only on a server on this Mac
+    /// (`resolvingPaths`), as only those paths are this Mac's; that touches
+    /// the file system, so call it off the main actor. A remote server's
+    /// paths are compared as written.
+    nonisolated static func servingSelectors(
+        models: [LocalModel], active: [String], resolvingPaths: Bool
+    ) -> [String: String] {
         guard !active.isEmpty else { return [:] }
         let exact = Set(active)
+        func resolved(_ path: String) -> String { resolvingPaths ? Self.resolved(path) : path }
         let resolvedActive = active.map { (resolved($0), $0) }
         var serving: [String: String] = [:]
         for local in models {

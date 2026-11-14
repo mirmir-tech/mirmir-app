@@ -4,6 +4,8 @@ import SwiftUI
 struct InstanceDetail: View {
     @Environment(AppModel.self) private var model
     @State private var managingRemoteAccess = false
+    @State private var editing = false
+    @State private var confirmingRemoval = false
     let record: InstanceRecord
 
     var body: some View {
@@ -39,6 +41,12 @@ struct InstanceDetail: View {
         }
         .sheet(isPresented: $managingRemoteAccess) {
             RemoteAccessSheet(controller: RemoteAccessController(model: model))
+        }
+        .sheet(isPresented: $editing) { InstanceSheet(editing: record) }
+        .confirmationDialog("Remove \(record.name)?", isPresented: $confirmingRemoval) {
+            Button("Remove", role: .destructive) { model.remove(instance: record.id) }
+        } message: {
+            Text(removalMessage)
         }
     }
 
@@ -96,9 +104,20 @@ struct InstanceDetail: View {
             .frame(maxWidth: .infinity)
         }
         if !record.isThisMac {
-            Button("Remove Instance", role: .destructive) { model.remove(instance: record.id) }
+            Button("Edit Server…") { editing = true }
+                .frame(maxWidth: .infinity)
+            Button("Remove Instance", role: .destructive) { confirmingRemoval = true }
                 .frame(maxWidth: .infinity)
         }
+    }
+
+    private var removalMessage: String {
+        let chats = model.chatCount(of: record.id)
+        let key = "Its API key is deleted from the Keychain."
+        guard chats > 0 else { return key }
+        let count = chats == 1 ? "Its chat stays" : "Its \(chats) chats stay"
+        return "\(key) \(count) on this Mac and return if you add a server at \(model.address(of: record)) again. "
+            + "To change its key or certificate, use Edit Server instead."
     }
 }
 

@@ -34,11 +34,11 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
         case .unreachable(let address, let detail):
             "Cannot reach \(address): \(detail)."
         case .missingKey(let address):
-            "No API key is saved for \(address). Edit the server and enter one."
+            "No API key is saved for \(address). Choose Edit Server in Instances and enter one."
         case .certificateChanged(let address, let pinned, let presented):
-            "\(address) presented certificate \(presented), not the trusted \(pinned). If the server's certificate was replaced, remove and add the server again."
+            "\(address) presented certificate \(presented), not the trusted \(pinned). If the server's certificate was replaced, choose Edit Server in Instances, test it and trust the new certificate."
         case .keyRejected(let address):
-            "\(address) refused the API key. It may have been revoked; create a new one on the server."
+            "\(address) refused the API key. It may have been revoked; create a new one on the server and enter it with Edit Server in Instances."
         case .permissionDenied(let message):
             message
         case .timedOut(let address, let after):
@@ -93,7 +93,7 @@ public enum ConnectionError: Error, Hashable, Sendable, LocalizedError {
                 // Without a pin, a self-signed certificate fails the system
                 // trust check, which the transport reports only as a closed
                 // connection.
-                detail += " If the server uses its self-signed certificate, add it again and trust its fingerprint"
+                detail += " If the server uses its self-signed certificate, choose Edit Server in Instances and trust its fingerprint"
             }
             return .unreachable(address: address, detail: detail)
         default: return wrapped

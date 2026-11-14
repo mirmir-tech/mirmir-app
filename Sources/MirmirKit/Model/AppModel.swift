@@ -46,6 +46,10 @@ public final class AppModel {
     let deadlines: CallDeadlines
     let credentials: any CredentialStore
     let instanceFile = JSONFile<[InstanceRecord]>(name: "instances.json")
+    /// Removed remote servers whose chats are kept: adding a server at the
+    /// same address again gives it the removed one's identity and chats.
+    let removedInstanceFile = JSONFile<[InstanceRecord]>(name: "removed-instances.json")
+    var removedInstances: [InstanceRecord] = []
     var sessionTask: Task<Void, Never>?
     var probeTask: Task<Void, Never>?
     var refreshModelsSoon = false
@@ -73,6 +77,7 @@ public final class AppModel {
         var stored = instanceFile.load() ?? []
         stored.removeAll { $0.isThisMac }
         instances = [.thisMac] + stored
+        removedInstances = removedInstanceFile.load() ?? []
         currentInstanceID = InstanceRecord.thisMacID
         chat.model = self
         chat.instanceChanged()
@@ -104,32 +109,6 @@ public final class AppModel {
         currentInstanceID = id
         chat.instanceChanged()
         connectCurrent()
-    }
-
-    /// Saves an instance; a remote server's API key goes to the credential
-    /// store, never to `instances.json`.
-    public func add(_ record: InstanceRecord, key: String? = nil) {
-        if let key {
-            do {
-                try credentials.setKey(key, for: record.id)
-            } catch {
-                notice = error.localizedDescription
-                return
-            }
-        }
-        instances.append(record)
-        persistInstances()
-        summaries[record.id] = .checking
-        Task { await probe(record) }
-    }
-
-    public func remove(instance id: UUID) {
-        guard id != InstanceRecord.thisMacID else { return }
-        instances.removeAll { $0.id == id }
-        credentials.removeKey(for: id)
-        summaries[id] = nil
-        persistInstances()
-        if currentInstanceID == id { select(instance: InstanceRecord.thisMacID) }
     }
 
     /// Stops the server this app started; an attached server is left alone.
@@ -187,14 +166,5 @@ public final class AppModel {
         var message = context.map { "\($0): \(error.localizedDescription)" } ?? error.localizedDescription
         if let connection, !isCurrent(connection) { message = "\(connection.address): \(message)" }
         notice = message
-    }
-
-    private func persistInstances() {
-        guard !isPreview else { return }
-        do {
-            try instanceFile.save(instances.filter { !$0.isThisMac })
-        } catch {
-            notice = "Could not save instances: \(error.localizedDescription)"
-        }
     }
 }

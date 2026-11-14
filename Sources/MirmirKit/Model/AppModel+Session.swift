@@ -129,9 +129,12 @@ extension AppModel {
         let listed = try await connection.localModels()
         let active = try await connection.activeSelectors()
         // Matching resolves symlinks on disk: do it once per refresh, off the
-        // main actor, instead of in every table row and sort comparison.
+        // main actor, instead of in every table row and sort comparison. Only
+        // This Mac's paths are on this disk; a result for a connection that
+        // is no longer current is dropped by `publishModels`.
+        let local = currentInstance.target.kind.isLocal
         let serving = await Task.detached(priority: .utility) {
-            Self.servingSelectors(models: listed, active: active)
+            Self.servingSelectors(models: listed, active: active, resolvingPaths: local)
         }.value
         publishModels(listed, active: active, serving: serving, from: connection)
     }

@@ -32,7 +32,7 @@ struct InstancesView: View {
                     .inspectorColumnWidth(min: 280, ideal: 320, max: 380)
             }
         }
-        .sheet(isPresented: $adding) { AddInstanceSheet() }
+        .sheet(isPresented: $adding) { InstanceSheet() }
     }
 
     private var subtitle: String {

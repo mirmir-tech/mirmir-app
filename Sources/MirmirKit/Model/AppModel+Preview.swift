@@ -67,7 +67,7 @@ extension AppModel {
         phase = .connected(connection)
         models = PreviewData.models
         activeSelectors = [PreviewData.models[0].selector]
-        servingSelectors = Self.servingSelectors(models: models, active: activeSelectors)
+        servingSelectors = Self.servingSelectors(models: models, active: activeSelectors, resolvingPaths: true)
         let snapshot = PreviewData.telemetry(at: now, decode: 108.6, active: 3)
         telemetry = snapshot
         sparkline = PreviewData.sparkline
