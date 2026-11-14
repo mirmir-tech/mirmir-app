@@ -71,6 +71,25 @@ struct RemoteTests {
         #expect(RemoteEndpoint(address: "") == nil)
     }
 
+    @Test func parsesPastedAddressesStrictly() {
+        // The app shows remote addresses with their scheme; pasting one back works.
+        #expect(RemoteEndpoint(address: "grpcs://host:7443")?.address == "host:7443")
+        #expect(RemoteEndpoint(address: "GRPCS://[::1]:9000")?.address == "[::1]:9000")
+        #expect(RemoteEndpoint(address: " lab.local:9000\n")?.port == 9000)
+        #expect(RemoteEndpoint(address: "fe80::1")?.address == "[fe80::1]:7443")
+        #expect(RemoteEndpoint(address: "[::1]foo") == nil)
+        #expect(RemoteEndpoint(address: "[::1]:") == nil)
+        #expect(RemoteEndpoint(address: "[::1") == nil)
+        #expect(RemoteEndpoint(address: "[lab.local]:7443") == nil)
+        #expect(RemoteEndpoint(address: "grpcs://host:7443/") == nil)
+        #expect(RemoteEndpoint(address: "https://host") == nil)
+        #expect(RemoteEndpoint(address: "lab local") == nil)
+        #expect(RemoteEndpoint(address: "host:7443:1") == nil)
+        #expect(RemoteEndpoint(address: "host:+7443") == nil)
+        #expect(RemoteEndpoint(address: "host:70000") == nil)
+        #expect(RemoteEndpoint(address: "grpcs://") == nil)
+    }
+
     #if canImport(Darwin)
     // AppModel stores instances under Application Support, which
     // swift-corelibs-foundation does not provide.

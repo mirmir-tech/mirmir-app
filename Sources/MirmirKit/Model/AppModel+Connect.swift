@@ -34,7 +34,7 @@ extension AppModel {
     /// Where a connection to the instance goes: the socket path or
     /// `grpcs://host:port`, for display.
     public nonisolated func address(of record: InstanceRecord) -> String {
-        if case .remote(let endpoint) = record.target { return "grpcs://\(endpoint.address)" }
+        if case .remote(let endpoint) = record.target { return RemoteEndpoint.scheme + endpoint.address }
         let socket = paths.socket(for: record.target) ?? ""
         // The home the socket was resolved against, not the process's.
         return socket.hasPrefix(paths.home + "/") ? "~" + socket.dropFirst(paths.home.count) : socket
