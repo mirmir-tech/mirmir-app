@@ -25,9 +25,20 @@ enum PreviewData {
     ]
 
     static let inspections: [String: ModelInspection] = [
-        models[0].selector: inspection(weights: 19_800_000_000, kv: 4_600_000_000, budget: 51_800_000_000, tokens: 65_536),
+        // Loaded with the 65,536 tokens saved for it.
+        models[0].selector: inspection(
+            weights: 19_800_000_000, kv: 4_600_000_000, budget: 51_800_000_000, tokens: 65_536,
+            context: context(max: 262_144, saved: .tokens(65_536), automatic: 131_072, resident: 65_536)
+        ),
+        models[1].selector: inspection(
+            weights: 2_300_000_000, kv: 4_400_000_000, budget: 51_800_000_000, tokens: 40_960,
+            context: context(max: 40_960, saved: .automatic, automatic: 194_128, resident: nil)
+        ),
         // Over budget: weights and K/V together exceed the track.
-        models[3].selector: inspection(weights: 112_000_000_000, kv: 6_400_000_000, budget: 51_800_000_000, tokens: 8_192),
+        models[3].selector: inspection(
+            weights: 112_000_000_000, kv: 6_400_000_000, budget: 51_800_000_000, tokens: 8_192,
+            context: context(max: 8_192, saved: .automatic, automatic: 8_192, resident: nil)
+        ),
     ]
 
     static let sparkline: [Double] = (0..<60).map { index in
@@ -135,7 +146,13 @@ enum PreviewData {
         )
     }
 
-    private static func inspection(weights: UInt64, kv: UInt64, budget: UInt64, tokens: UInt64) -> ModelInspection {
+    private static func context(max: UInt64, saved: ContextChoice, automatic: UInt64, resident: UInt64?) -> ModelContext {
+        ModelContext(blockTokens: 16, minTokens: 16, maxTokens: max, saved: saved, automaticTokens: automatic, residentTokens: resident)
+    }
+
+    private static func inspection(
+        weights: UInt64, kv: UInt64, budget: UInt64, tokens: UInt64, context: ModelContext
+    ) -> ModelInspection {
         let workspace: UInt64 = 536_870_912
         let required = weights + kv + workspace
         return ModelInspection(
@@ -146,7 +163,7 @@ enum PreviewData {
                 availableBytes: budget, budgetBytes: budget, fit: required <= budget ? .fits : .doesNotFit,
                 maxSafeContextTokens: required <= budget ? 131_072 : 0, configuredCacheTokens: tokens
             ),
-            task: "text-generation", maxInputTokens: 262_144
+            task: .generation, maxInputTokens: context.maxTokens, context: context
         )
     }
 

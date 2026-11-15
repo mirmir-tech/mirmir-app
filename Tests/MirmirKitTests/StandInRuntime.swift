@@ -9,11 +9,23 @@ import Synchronization
 /// What a `StandInRuntime` received.
 final class RuntimeRecord: Sendable {
     private let state = Mutex<(images: [Int], cancelled: [String])>(([], []))
+    private let models = Mutex<ModelCalls>(ModelCalls())
+
+    /// The context each model call sent, nil when it sent none.
+    struct ModelCalls: Sendable {
+        var inspected: [Mirmir_V1_ModelContextChoice?] = []
+        var loaded: [Mirmir_V1_ModelContextChoice?] = []
+        var updated: [(settings: Bool, context: Mirmir_V1_ModelContextChoice?)] = []
+    }
 
     /// The image size of every Generate request, in arrival order.
     var generatedImageSizes: [Int] { state.withLock { $0.images } }
     /// The operation ids of every CancelOperation request.
     var cancelledOperations: [String] { state.withLock { $0.cancelled } }
+
+    var modelCalls: ModelCalls { models.withLock { $0 } }
+
+    func recordModelCall(_ change: (inout ModelCalls) -> Void) { models.withLock { change(&$0) } }
 
     fileprivate func generated(imageBytes: Int) { state.withLock { $0.images.append(imageBytes) } }
     fileprivate func cancelled(_ operation: String) { state.withLock { $0.cancelled.append(operation) } }
@@ -32,6 +44,7 @@ struct StandInRuntime: RegistrableRPCService {
     let holds: Bool
 
     func registerMethods<Transport: ServerTransport>(with router: inout RPCRouter<Transport>) {
+        registerModelMethods(with: &router)
         router.registerHandler(
             forMethod: Mirmir_V1_Runtime.Method.Health.descriptor,
             deserializer: ProtobufDeserializer<Mirmir_V1_HealthRequest>(),

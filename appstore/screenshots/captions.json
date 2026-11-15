@@ -1,0 +1,64 @@
+{
+  "slides": [
+    {
+      "file": "01-overview",
+      "raw": "overview",
+      "layout": "window",
+      "en-US": {
+        "lead": "Your models.",
+        "accent": "Your Mac.",
+        "sub": "Local language models with live speed, memory and sessions. No cloud, no account."
+      },
+      "pl": {
+        "lead": "Twoje modele.",
+        "accent": "Twój Mac.",
+        "sub": "Lokalne modele językowe z podglądem tempa, pamięci i sesji. Bez chmury i bez konta."
+      }
+    },
+    {
+      "file": "02-chat",
+      "raw": "chat",
+      "layout": "window",
+      "en-US": {
+        "lead": "Chat that",
+        "accent": "stays home.",
+        "sub": "Streaming replies with the model's reasoning, tokens and speed for every answer."
+      },
+      "pl": {
+        "lead": "Czat, który",
+        "accent": "nie wychodzi z domu.",
+        "sub": "Odpowiedzi na żywo, z tokiem rozumowania modelu, liczbą tokenów i tempem każdej z nich."
+      }
+    },
+    {
+      "file": "03-menu-bar",
+      "raw": "panel",
+      "layout": "panel",
+      "en-US": {
+        "lead": "Lives in",
+        "accent": "the menu bar.",
+        "sub": "Generation speed at a glance. The loaded model, memory and shortcuts are one click away."
+      },
+      "pl": {
+        "lead": "Mieszka",
+        "accent": "w pasku menu.",
+        "sub": "Tempo generowania zawsze na widoku. Model, pamięć i skróty o jedno kliknięcie dalej."
+      }
+    },
+    {
+      "file": "04-servers",
+      "raw": "instances",
+      "layout": "window",
+      "en-US": {
+        "lead": "One app,",
+        "accent": "many machines.",
+        "sub": "Switch to a GPU workstation across the room, or share this Mac over TLS with scoped keys."
+      },
+      "pl": {
+        "lead": "Jedna aplikacja,",
+        "accent": "wiele maszyn.",
+        "sub": "Przełącz się na stację z GPU w drugim pokoju albo udostępnij tego Maca przez TLS z kluczami."
+      }
+    }
+  ]
+}

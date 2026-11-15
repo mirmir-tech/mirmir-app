@@ -411,9 +411,103 @@ public nonisolated struct Mirmir_V1_InspectModelRequest: Sendable {
 
   public var selector: String = String()
 
+  /// Estimate memory for this context instead of the saved one.
+  public var context: Mirmir_V1_ModelContextChoice {
+    get {_context ?? Mirmir_V1_ModelContextChoice()}
+    set {_context = newValue}
+  }
+  /// Returns true if `context` has been explicitly set.
+  public var hasContext: Bool {self._context != nil}
+  /// Clears the value of `context`. Subsequent reads from it will return its default value.
+  public mutating func clearContext() {self._context = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _context: Mirmir_V1_ModelContextChoice? = nil
+}
+
+/// The K/V capacity a model loads with: sized automatically, or a token count
+/// rounded up to whole K/V blocks.
+public nonisolated struct Mirmir_V1_ModelContextChoice: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var choice: Mirmir_V1_ModelContextChoice.OneOf_Choice? = nil
+
+  public var automatic: Bool {
+    get {
+      if case .automatic(let v)? = choice {return v}
+      return false
+    }
+    set {choice = .automatic(newValue)}
+  }
+
+  public var tokens: UInt64 {
+    get {
+      if case .tokens(let v)? = choice {return v}
+      return 0
+    }
+    set {choice = .tokens(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Choice: Equatable, Sendable {
+    case automatic(Bool)
+    case tokens(UInt64)
+
+  }
+
+  public init() {}
+}
+
+/// The context a model can be given before it loads.
+public nonisolated struct Mirmir_V1_ModelContext: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Tokens per K/V block; a chosen context is a whole number of blocks.
+  public var blockTokens: UInt64 = 0
+
+  public var minTokens: UInt64 = 0
+
+  /// The most the model can use: its context length for each of the requests
+  /// it serves at once (what automatic sizing is capped at).
+  public var maxTokens: UInt64 = 0
+
+  /// The context saved for this model and used by every load.
+  public var saved: Mirmir_V1_ModelContextChoice {
+    get {_saved ?? Mirmir_V1_ModelContextChoice()}
+    set {_saved = newValue}
+  }
+  /// Returns true if `saved` has been explicitly set.
+  public var hasSaved: Bool {self._saved != nil}
+  /// Clears the value of `saved`. Subsequent reads from it will return its default value.
+  public mutating func clearSaved() {self._saved = nil}
+
+  /// The context automatic sizing would give it now.
+  public var automaticTokens: UInt64 = 0
+
+  /// The context it serves with while loaded.
+  public var residentTokens: UInt64 {
+    get {_residentTokens ?? 0}
+    set {_residentTokens = newValue}
+  }
+  /// Returns true if `residentTokens` has been explicitly set.
+  public var hasResidentTokens: Bool {self._residentTokens != nil}
+  /// Clears the value of `residentTokens`. Subsequent reads from it will return its default value.
+  public mutating func clearResidentTokens() {self._residentTokens = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _saved: Mirmir_V1_ModelContextChoice? = nil
+  fileprivate var _residentTokens: UInt64? = nil
 }
 
 public nonisolated struct Mirmir_V1_GenerationSettings: Sendable {
@@ -477,6 +571,15 @@ public nonisolated struct Mirmir_V1_InspectModelResponse: @unchecked Sendable {
   public var hasCapabilities: Bool {_storage._capabilities != nil}
   /// Clears the value of `capabilities`. Subsequent reads from it will return its default value.
   public mutating func clearCapabilities() {_uniqueStorage()._capabilities = nil}
+
+  public var context: Mirmir_V1_ModelContext {
+    get {_storage._context ?? Mirmir_V1_ModelContext()}
+    set {_uniqueStorage()._context = newValue}
+  }
+  /// Returns true if `context` has been explicitly set.
+  public var hasContext: Bool {_storage._context != nil}
+  /// Clears the value of `context`. Subsequent reads from it will return its default value.
+  public mutating func clearContext() {_uniqueStorage()._context = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -581,11 +684,22 @@ public nonisolated struct Mirmir_V1_UpdateModelGenerationRequest: Sendable {
   /// Clears the value of `settings`. Subsequent reads from it will return its default value.
   public mutating func clearSettings() {self._settings = nil}
 
+  /// Saved for the model's next load; at least one of settings and context.
+  public var context: Mirmir_V1_ModelContextChoice {
+    get {_context ?? Mirmir_V1_ModelContextChoice()}
+    set {_context = newValue}
+  }
+  /// Returns true if `context` has been explicitly set.
+  public var hasContext: Bool {self._context != nil}
+  /// Clears the value of `context`. Subsequent reads from it will return its default value.
+  public mutating func clearContext() {self._context = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _settings: Mirmir_V1_GenerationSettings? = nil
+  fileprivate var _context: Mirmir_V1_ModelContextChoice? = nil
 }
 
 public nonisolated struct Mirmir_V1_UpdateModelGenerationResponse: Sendable {
@@ -681,11 +795,22 @@ public nonisolated struct Mirmir_V1_LoadModelRequest: Sendable {
 
   public var force: Bool = false
 
+  /// Saved for the model, then used by this load.
+  public var context: Mirmir_V1_ModelContextChoice {
+    get {_context ?? Mirmir_V1_ModelContextChoice()}
+    set {_context = newValue}
+  }
+  /// Returns true if `context` has been explicitly set.
+  public var hasContext: Bool {self._context != nil}
+  /// Clears the value of `context`. Subsequent reads from it will return its default value.
+  public mutating func clearContext() {self._context = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _settings: Mirmir_V1_GenerationSettings? = nil
+  fileprivate var _context: Mirmir_V1_ModelContextChoice? = nil
 }
 
 public nonisolated struct Mirmir_V1_ModelLifecycleEvent: Sendable {
@@ -3090,7 +3215,7 @@ nonisolated extension Mirmir_V1_LocalModelInfo: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Mirmir_V1_InspectModelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InspectModelRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}selector\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}selector\0\u{1}context\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3099,20 +3224,145 @@ nonisolated extension Mirmir_V1_InspectModelRequest: SwiftProtobuf.Message, Swif
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.selector) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._context) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.selector.isEmpty {
       try visitor.visitSingularStringField(value: self.selector, fieldNumber: 1)
     }
+    try { if let v = self._context {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Mirmir_V1_InspectModelRequest, rhs: Mirmir_V1_InspectModelRequest) -> Bool {
     if lhs.selector != rhs.selector {return false}
+    if lhs._context != rhs._context {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Mirmir_V1_ModelContextChoice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ModelContextChoice"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}automatic\0\u{1}tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.choice != nil {try decoder.handleConflictingOneOf()}
+          self.choice = .automatic(v)
+        }
+      }()
+      case 2: try {
+        var v: UInt64?
+        try decoder.decodeSingularUInt64Field(value: &v)
+        if let v = v {
+          if self.choice != nil {try decoder.handleConflictingOneOf()}
+          self.choice = .tokens(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.choice {
+    case .automatic?: try {
+      guard case .automatic(let v)? = self.choice else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 1)
+    }()
+    case .tokens?: try {
+      guard case .tokens(let v)? = self.choice else { preconditionFailure() }
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 2)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Mirmir_V1_ModelContextChoice, rhs: Mirmir_V1_ModelContextChoice) -> Bool {
+    if lhs.choice != rhs.choice {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Mirmir_V1_ModelContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ModelContext"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}block_tokens\0\u{3}min_tokens\0\u{3}max_tokens\0\u{1}saved\0\u{3}automatic_tokens\0\u{3}resident_tokens\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.blockTokens) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.minTokens) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.maxTokens) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._saved) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.automaticTokens) }()
+      case 6: try { try decoder.decodeSingularUInt64Field(value: &self._residentTokens) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.blockTokens != 0 {
+      try visitor.visitSingularUInt64Field(value: self.blockTokens, fieldNumber: 1)
+    }
+    if self.minTokens != 0 {
+      try visitor.visitSingularUInt64Field(value: self.minTokens, fieldNumber: 2)
+    }
+    if self.maxTokens != 0 {
+      try visitor.visitSingularUInt64Field(value: self.maxTokens, fieldNumber: 3)
+    }
+    try { if let v = self._saved {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    if self.automaticTokens != 0 {
+      try visitor.visitSingularUInt64Field(value: self.automaticTokens, fieldNumber: 5)
+    }
+    try { if let v = self._residentTokens {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 6)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Mirmir_V1_ModelContext, rhs: Mirmir_V1_ModelContext) -> Bool {
+    if lhs.blockTokens != rhs.blockTokens {return false}
+    if lhs.minTokens != rhs.minTokens {return false}
+    if lhs.maxTokens != rhs.maxTokens {return false}
+    if lhs._saved != rhs._saved {return false}
+    if lhs.automaticTokens != rhs.automaticTokens {return false}
+    if lhs._residentTokens != rhs._residentTokens {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3170,7 +3420,7 @@ nonisolated extension Mirmir_V1_GenerationSettings: SwiftProtobuf.Message, Swift
 
 nonisolated extension Mirmir_V1_InspectModelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InspectModelResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}settings\0\u{3}has_mirmir_overrides\0\u{1}memory\0\u{1}task\0\u{1}capabilities\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}settings\0\u{3}has_mirmir_overrides\0\u{1}memory\0\u{1}task\0\u{1}capabilities\0\u{1}context\0")
 
   fileprivate class _StorageClass {
     var _settings: Mirmir_V1_GenerationSettings? = nil
@@ -3178,6 +3428,7 @@ nonisolated extension Mirmir_V1_InspectModelResponse: SwiftProtobuf.Message, Swi
     var _memory: Mirmir_V1_ModelMemoryEstimate? = nil
     var _task: String = String()
     var _capabilities: Mirmir_V1_ModelTaskCapabilities? = nil
+    var _context: Mirmir_V1_ModelContext? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -3193,6 +3444,7 @@ nonisolated extension Mirmir_V1_InspectModelResponse: SwiftProtobuf.Message, Swi
       _memory = source._memory
       _task = source._task
       _capabilities = source._capabilities
+      _context = source._context
     }
   }
 
@@ -3216,6 +3468,7 @@ nonisolated extension Mirmir_V1_InspectModelResponse: SwiftProtobuf.Message, Swi
         case 3: try { try decoder.decodeSingularMessageField(value: &_storage._memory) }()
         case 4: try { try decoder.decodeSingularStringField(value: &_storage._task) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._capabilities) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._context) }()
         default: break
         }
       }
@@ -3243,6 +3496,9 @@ nonisolated extension Mirmir_V1_InspectModelResponse: SwiftProtobuf.Message, Swi
       try { if let v = _storage._capabilities {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
       } }()
+      try { if let v = _storage._context {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -3257,6 +3513,7 @@ nonisolated extension Mirmir_V1_InspectModelResponse: SwiftProtobuf.Message, Swi
         if _storage._memory != rhs_storage._memory {return false}
         if _storage._task != rhs_storage._task {return false}
         if _storage._capabilities != rhs_storage._capabilities {return false}
+        if _storage._context != rhs_storage._context {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -3411,7 +3668,7 @@ nonisolated extension Mirmir_V1_RerankCapabilities: SwiftProtobuf.Message, Swift
 
 nonisolated extension Mirmir_V1_UpdateModelGenerationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateModelGenerationRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}selector\0\u{1}settings\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}selector\0\u{1}settings\0\u{1}context\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3421,6 +3678,7 @@ nonisolated extension Mirmir_V1_UpdateModelGenerationRequest: SwiftProtobuf.Mess
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.selector) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._settings) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._context) }()
       default: break
       }
     }
@@ -3437,12 +3695,16 @@ nonisolated extension Mirmir_V1_UpdateModelGenerationRequest: SwiftProtobuf.Mess
     try { if let v = self._settings {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    try { if let v = self._context {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Mirmir_V1_UpdateModelGenerationRequest, rhs: Mirmir_V1_UpdateModelGenerationRequest) -> Bool {
     if lhs.selector != rhs.selector {return false}
     if lhs._settings != rhs._settings {return false}
+    if lhs._context != rhs._context {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3559,7 +3821,7 @@ nonisolated extension Mirmir_V1_ModelMemoryEstimate: SwiftProtobuf.Message, Swif
 
 nonisolated extension Mirmir_V1_LoadModelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".LoadModelRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}selector\0\u{1}settings\0\u{3}config_id\0\u{3}repo_id\0\u{1}revision\0\u{1}commit\0\u{1}force\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}selector\0\u{1}settings\0\u{3}config_id\0\u{3}repo_id\0\u{1}revision\0\u{1}commit\0\u{1}force\0\u{1}context\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3574,6 +3836,7 @@ nonisolated extension Mirmir_V1_LoadModelRequest: SwiftProtobuf.Message, SwiftPr
       case 5: try { try decoder.decodeSingularStringField(value: &self.revision) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.commit) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.force) }()
+      case 8: try { try decoder.decodeSingularMessageField(value: &self._context) }()
       default: break
       }
     }
@@ -3605,6 +3868,9 @@ nonisolated extension Mirmir_V1_LoadModelRequest: SwiftProtobuf.Message, SwiftPr
     if self.force != false {
       try visitor.visitSingularBoolField(value: self.force, fieldNumber: 7)
     }
+    try { if let v = self._context {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3616,6 +3882,7 @@ nonisolated extension Mirmir_V1_LoadModelRequest: SwiftProtobuf.Message, SwiftPr
     if lhs.revision != rhs.revision {return false}
     if lhs.commit != rhs.commit {return false}
     if lhs.force != rhs.force {return false}
+    if lhs._context != rhs._context {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

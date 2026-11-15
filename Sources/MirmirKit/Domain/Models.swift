@@ -10,6 +10,15 @@ public enum LocalModelState: Hashable, Sendable {
     case error
     case unrecognized(String)
 
+    /// The checkpoint is complete on disk: not a paused download, not
+    /// missing.
+    public var isOnDisk: Bool {
+        switch self {
+        case .paused, .missing: false
+        case .loaded, .loading, .available, .error, .unrecognized: true
+        }
+    }
+
     public var label: String {
         switch self {
         case .loaded: "Loaded"
@@ -115,14 +124,46 @@ public struct GenerationSettings: Hashable, Sendable {
         self.topK = topK
         self.repetitionPenalty = repetitionPenalty
     }
+
+    /// These settings with Max tokens from 1 up to `limit`.
+    public func boundingMaxTokens(by limit: UInt64) -> GenerationSettings {
+        var bounded = self
+        bounded.maxTokens = min(max(maxTokens, 1), max(limit, 1))
+        return bounded
+    }
+}
+
+/// What a model does, decoded from `InspectModelResponse.task`.
+public enum ModelTask: Hashable, Sendable {
+    case generation, rerank, embedding
+    case unrecognized(String)
+
+    public init(wire: String) {
+        switch wire {
+        case "generation": self = .generation
+        case "rerank": self = .rerank
+        case "embedding": self = .embedding
+        default: self = .unrecognized(wire)
+        }
+    }
+
+    /// Generation defaults apply; an unknown task keeps them editable.
+    public var generates: Bool {
+        switch self {
+        case .rerank, .embedding: false
+        case .generation, .unrecognized: true
+        }
+    }
 }
 
 public struct ModelInspection: Hashable, Sendable {
     public let settings: GenerationSettings
     public let hasOverrides: Bool
     public let memory: MemoryEstimate?
-    public let task: String
+    public let task: ModelTask
     public let maxInputTokens: UInt64
+    /// The context the model can be given; nil hides the control.
+    public let context: ModelContext?
 }
 
 /// Progress of a load, decoded from `ModelLifecycleEvent`.

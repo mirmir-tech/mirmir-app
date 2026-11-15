@@ -9,9 +9,9 @@ public final class AppModel {
     // Navigation shared by the window, menu bar and keyboard shortcuts.
     public var section: SidebarSection = .overview
     public var range: TimeRange = .hour
-    /// The Hugging Face download sheet on the Models screen, opened from the
-    /// screen's toolbar or the menu bar panel.
-    public var presentingDownload = false
+    /// What the Models screen lists; the menu bar's Download a Model opens
+    /// it on Hugging Face.
+    public var modelScope: ModelScope = .all
 
     // Instances.
     public internal(set) var instances: [InstanceRecord]

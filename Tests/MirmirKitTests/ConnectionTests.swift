@@ -119,7 +119,7 @@ struct RemoteTests {
     /// The login Keychain ignores accessibility classes, so a new item
     /// claims none; the sandbox scopes it to the app.
     @Test func keychainItemsClaimNoDataProtectionClass() {
-        let item = KeychainCredentials.newItem(UUID(), data: Data("mmk_a".utf8))
+        let item = LoginKeychainItems(service: KeychainCredentials.service).newItem("keys", data: Data("mmk_a".utf8))
         #expect(item[kSecAttrAccessible as String] == nil)
         #expect(item[kSecUseDataProtectionKeychain as String] == nil)
         #expect(item[kSecAttrService as String] as? String == KeychainCredentials.service)

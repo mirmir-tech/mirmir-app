@@ -149,8 +149,9 @@ extension ModelInspection {
             settings: GenerationSettings(wire.settings),
             hasOverrides: wire.hasMirmirOverrides_p,
             memory: wire.hasMemory ? MemoryEstimate(wire.memory) : nil,
-            task: wire.task,
-            maxInputTokens: wire.capabilities.maxInputTokens
+            task: ModelTask(wire: wire.task),
+            maxInputTokens: wire.capabilities.maxInputTokens,
+            context: wire.hasContext ? ModelContext(wire.context) : nil
         )
     }
 }

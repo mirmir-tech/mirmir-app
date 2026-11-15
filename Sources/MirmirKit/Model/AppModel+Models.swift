@@ -37,6 +37,54 @@ extension AppModel {
         activeSelector(for: local) != nil ? .loaded : local.state
     }
 
+    /// Running downloads by repository: those this app started, and server
+    /// pulls from any client, such as the CLI or another Mac.
+    public var downloads: [String: ModelDownload] {
+        var downloads: [String: ModelDownload] = [:]
+        for pull in activities.values where pull.kind == .pull && pull.state.isActive && !pull.target.isEmpty {
+            downloads[pull.target] = ModelDownload(
+                repoID: pull.target, stage: pull.stage.replacingOccurrences(of: "_", with: " ").capitalized,
+                downloadedBytes: pull.progress?.current, totalBytes: pull.progress?.total,
+                cancellableOperation: pull.cancellable ? pull.id : nil
+            )
+        }
+        for (repoID, transfer) in transfers {
+            downloads[repoID] = ModelDownload(
+                repoID: repoID, stage: transfer.phase.label,
+                downloadedBytes: transfer.downloadedBytes, totalBytes: transfer.totalBytes,
+                cancellableOperation: downloads[repoID]?.cancellableOperation
+            )
+        }
+        return downloads
+    }
+
+    /// Downloads whose checkpoint the server does not list yet, newest
+    /// repository name first.
+    public var unlistedDownloads: [ModelDownload] {
+        let listed = Set(models.map(\.repoID))
+        return downloads.values.filter { !listed.contains($0.repoID) }.sorted { $0.repoID < $1.repoID }
+    }
+
+    /// Whether the server has the search result's checkpoint now, complete.
+    /// Kept search results carry the state of their search; this follows
+    /// downloads and removals since. A paused (incomplete) download or a
+    /// missing checkpoint is listed but not downloaded, so it can be
+    /// downloaded again; an unsupported complete one is downloaded.
+    public func isDownloaded(_ result: CatalogModel) -> Bool {
+        models.contains { $0.repoID == result.id && $0.state.isOnDisk }
+    }
+
+    /// The running download of the model's repository.
+    public func download(of local: LocalModel) -> ModelDownload? {
+        guard !local.repoID.isEmpty else { return nil }
+        return downloads[local.repoID]
+    }
+
+    public func cancel(_ download: ModelDownload) {
+        guard let connection, let operation = download.cancellableOperation else { return }
+        Task { _ = try? await connection.cancel(operationID: operation) }
+    }
+
     /// The selector to send for generation and unload: the one the server
     /// reports as active when it differs from the listed selector.
     public func servingSelector(for local: LocalModel) -> String {
@@ -81,57 +129,6 @@ extension AppModel {
         return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
-    public func load(_ selector: String) {
-        guard let connection else { return }
-        loads[selector] = LoadProgress(phase: "queued", current: 0, total: nil, detail: "", finished: false)
-        Task {
-            do {
-                try await connection.load(selector: selector) { progress in
-                    await self.setLoad(selector, progress, from: connection)
-                }
-            } catch {
-                report(error, "Loading \(selector) failed", from: connection)
-            }
-            if isCurrent(connection) { loads[selector] = nil }
-            try? await refreshModels(connection)
-        }
-    }
-
-    public func unload(_ selector: String) {
-        guard let connection else { return }
-        Task {
-            do {
-                _ = try await connection.unload(selector: selector)
-            } catch {
-                report(error, "Unloading \(selector) failed", from: connection)
-            }
-            if isCurrent(connection) { inspections[selector] = nil }
-            try? await refreshModels(connection)
-        }
-    }
-
-    public func inspect(_ selector: String) async {
-        guard let connection else { return }
-        do {
-            let inspection = try await connection.inspect(selector: selector)
-            if isCurrent(connection) { inspections[selector] = inspection }
-        } catch {
-            guard !isPreview else { return }
-            report(error, "Inspecting \(selector) failed", from: connection)
-        }
-    }
-
-    public func updateSettings(_ selector: String, _ settings: GenerationSettings) async {
-        guard let connection else { return }
-        do {
-            try await connection.updateSettings(selector: selector, settings: settings)
-            let inspection = try await connection.inspect(selector: selector)
-            if isCurrent(connection) { inspections[selector] = inspection }
-        } catch {
-            report(error, "Saving settings failed", from: connection)
-        }
-    }
-
     public func search(_ query: String) async throws(ConnectionError) -> [CatalogModel] {
         guard let connection else { throw .noServer(socket: currentInstance.name) }
         return try await connection.search(query: query)
@@ -148,8 +145,10 @@ extension AppModel {
             } catch {
                 report(error, "Downloading \(repoID) failed", from: connection)
             }
-            if isCurrent(connection) { transfers[repoID] = nil }
+            // List the checkpoint before its transfer goes, so its row
+            // never disappears in between.
             try? await refreshModels(connection)
+            if isCurrent(connection) { transfers[repoID] = nil }
         }
     }
 
@@ -170,11 +169,11 @@ extension AppModel {
         Task { _ = try? await connection.cancel(operationID: activity.id) }
     }
 
-    func setLoad(_ selector: String, _ progress: LoadProgress, from connection: RuntimeConnection) {
-        if isCurrent(connection) { loads[selector] = progress }
-    }
-
     func setTransfer(_ repoID: String, _ progress: TransferProgress, from connection: RuntimeConnection) {
-        if isCurrent(connection) { transfers[repoID] = progress }
+        guard isCurrent(connection) else { return }
+        // The server lists a checkpoint once its first files arrive: look
+        // for it whenever the transfer moves to another phase.
+        if transfers[repoID]?.phase != progress.phase { refreshModelsSoon = true }
+        transfers[repoID] = progress
     }
 }

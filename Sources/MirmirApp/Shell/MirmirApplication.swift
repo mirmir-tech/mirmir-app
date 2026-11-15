@@ -15,7 +15,9 @@ struct MirmirApplication: App {
         .defaultSize(width: 1280, height: 800)
         .commands { MirmirCommands(model: delegate.model) }
 
-        MenuBarExtra {
+        // Xcode runs the whole app to render a #Preview; its status item there
+        // answers no clicks, so a preview adds none.
+        MenuBarExtra(isInserted: .constant(!Launch.isPreview)) {
             MenuBarPanel()
                 .environment(delegate.model)
         } label: {
@@ -34,6 +36,11 @@ enum WindowID {
     static let main = "main"
 }
 
+enum Launch {
+    /// Set by Xcode when it runs the app to render a SwiftUI preview.
+    static let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Its chats are read in `start`, once an older copy has quit and
@@ -42,6 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSources: [any DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A preview process must neither quit the running Mirmir (it would be
+        // the newest copy below) nor start a server of its own.
+        guard !Launch.isPreview else { return }
         // `kill` or Ctrl-C would skip applicationWillTerminate and leave the
         // owned server running; route them through a normal quit.
         for number in [SIGTERM, SIGINT] {
@@ -65,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Launched as an agent, the app is not activated by macOS, which then
         // takes the launch window off screen after a few seconds.
         DispatchQueue.main.async { MainWindow.front() }
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { note in
+            guard let window = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated { MainWindow.leaveDockIfClosed(closing: window) }
+        }
     }
 
     private static func otherInstances() -> [NSRunningApplication] {
@@ -109,9 +123,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.shutdown()
     }
 
-    /// A menu bar agent (`LSUIElement`): no Dock icon or menu bar of its own.
-    /// Closing the window leaves the menu bar item, which is the app; quit
-    /// from its panel.
+    /// A menu bar agent (`LSUIElement`), in the Dock only while its main
+    /// window is open (`MainWindow.showInDock`). Closing the window leaves
+    /// the menu bar item, which is the app; quit from its panel.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
@@ -141,6 +155,7 @@ struct MirmirCommands: Commands {
             Button("Chat") { show(.chat) }.keyboardShortcut("4")
             Button("Sessions") { show(.sessions) }.keyboardShortcut("5")
             Button("Logs") { show(.logs) }.keyboardShortcut("6")
+            Button("Configuration") { show(.configuration) }.keyboardShortcut("7")
         }
     }
 

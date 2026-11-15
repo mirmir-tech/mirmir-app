@@ -1,0 +1,1 @@
+machine learning,offline,private,chatbot,inference,server,api,assistant,gpu,metal,reasoning,vision

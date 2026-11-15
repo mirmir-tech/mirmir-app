@@ -1,0 +1,25 @@
+MiRMiR runs large language models on your Mac. Locally, natively, and without sending your prompts on a trip around the world first.
+
+It is a small menu bar app with a proper engine underneath: the MiRMiR runtime, written in Rust on top of Metal and MLX. Download a model, load it and talk to it. Meanwhile the app keeps an eye on what your hardware is doing, so you don't have to guess why the fans woke up.
+
+WHAT IT DOES
+
+• Models: see the models on your Mac and whether they handle tools, reasoning or images. Check a memory estimate before loading, and download new models from Hugging Face.
+• Chat: streaming replies with the model's reasoning, plus token count, speed and time to first token for every answer. Vision models accept images.
+• Overview: decode and prefill throughput, memory and recent sessions, over five minutes, an hour or a day.
+• Menu bar: the current generation speed sits in the menu bar. The loaded model, memory and shortcuts are one click away.
+• Local API: the bundled server offers an OpenAI-compatible HTTP API on 127.0.0.1, so your editor, scripts and other tools can use the same models.
+• More than one machine: connect to MiRMiR servers on other Macs or on an NVIDIA workstation, over TLS with scoped API keys, and switch between them from the sidebar. Or turn on Remote Access and let them use this Mac.
+
+PRIVATE BY DESIGN
+
+Your prompts, chats and models stay on your Mac, or on servers you add yourself. There is no account, no analytics and no tracking. The app goes online only to download the models you ask for and to talk to the servers you add.
+
+GOOD TO KNOW
+
+• Requires a Mac with Apple silicon and macOS 27 or later.
+• Language models are large. Small ones run on any Apple silicon Mac; bigger ones need more memory and disk space. MiRMiR shows a memory estimate before it loads anything.
+• The app runs in the macOS sandbox and reads only the model folders you grant in Settings.
+• MiRMiR is open source (Apache 2.0) and still young. Not every model has been tested yet, and support for new ones arrives with updates.
+
+Questions, bugs and ideas are welcome at mirmir.tech/contact.

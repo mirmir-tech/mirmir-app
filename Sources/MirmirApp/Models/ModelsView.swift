@@ -2,17 +2,20 @@ import AppKit
 import MirmirKit
 import SwiftUI
 
-enum ModelFilter: String, CaseIterable, Identifiable {
-    case all = "All", ready = "Ready", downloads = "Downloads"
-    var id: String { rawValue }
-}
-
+/// This server's models, their downloads and Hugging Face results in one
+/// table. The search field filters the models at once and, in All and
+/// Hugging Face, searches the Hub once the text rests; downloading a result
+/// returns to the models with its download selected.
 struct ModelsView: View {
     @Environment(AppModel.self) private var model
     @State private var selection: String?
     @State private var query = ""
-    @State private var filter: ModelFilter = .all
+    @State private var hub = HubSearch()
     @State private var showInspector = true
+    /// Bumped to focus the search field.
+    @State private var searchFocus = 0
+
+    private var scope: ModelScope { model.modelScope }
 
     /// The primary model when the table lists it (one loaded from a path
     /// outside the model directories is not listed); else a loaded model that
@@ -39,141 +42,147 @@ struct ModelsView: View {
         if panel.runModal() == .OK, let url = panel.url { model.loadModel(at: url) }
     }
 
+    /// Whether the search text also searches Hugging Face.
+    private var searchesHub: Bool { scope == .all || scope == .hub }
+
+    private var rows: [ModelRow] { model.modelRows(scope: scope, query: query, hub: searchesHub ? hub.results : []) }
+
     var body: some View {
-        VStack(spacing: 0) {
-            if filter == .downloads {
-                DownloadsList()
-            } else {
-                table
-            }
-        }
-        .navigationTitle("Models")
-        .navigationSubtitle("\(model.currentInstance.name) · \(model.models.count) models")
-        .searchable(text: $query, placement: .toolbar, prompt: "Search")
-        .toolbar {
-            ToolbarItem {
-                Picker("Filter", selection: $filter) {
-                    ForEach(ModelFilter.allCases) { Text($0.rawValue).tag($0) }
+        let rows = rows
+        ModelsTable(rows: rows, selection: $selection, download: download)
+            .overlay { if rows.isEmpty { empty } }
+            // Finder-like progress over the list, so nothing in the toolbar
+            // moves while the Hub is searched.
+            .overlay(alignment: .bottom) {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Searching Hugging Face…").font(.system(size: 12)).foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(.regularMaterial, in: Capsule())
+                .padding(.bottom, 16)
+                .opacity(searching && !rows.isEmpty ? 1 : 0)
+                .animation(.easeOut(duration: 0.2), value: searching)
+                .allowsHitTesting(false)
             }
+        .navigationTitle("Models")
+        // The scope tabs and the search field need the toolbar's width; the
+        // sidebar already names the screen.
+        .toolbar(removing: .title)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                ScopeTabs(scope: Bindable(model).modelScope, downloads: model.downloads.count)
+                    .fixedSize()
+            }
+            // The scopes lead; the folder and inspector buttons keep to the
+            // trailing edge.
+            ToolbarSpacer(.flexible)
             if model.canLoadLocalFolders {
-                ToolbarItem {
+                ToolbarItem(placement: .primaryAction) {
                     Button(action: loadFromFolder) { Label("Load from Folder", systemImage: "folder") }
                         .help("Load a model from a folder on this Mac")
                 }
             }
-            ToolbarItem {
-                Button { model.presentingDownload = true } label: { Label("Download", systemImage: "arrow.down.circle") }
-            }
-            ToolbarItem {
+            ToolbarItem(placement: .primaryAction) {
                 Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.trailing") }
+            }
+            // Its own glass capsule, apart from the buttons'.
+            ToolbarSpacer(.fixed)
+            ToolbarItem(placement: .primaryAction) {
+                ToolbarSearchField(
+                    text: $query, prompt: searchesHub ? "Search models and Hugging Face" : "Filter models",
+                    focusRequest: searchFocus
+                )
             }
         }
         .inspector(isPresented: $showInspector) {
-            Group {
-                if let selection, let local = model.model(selector: selection) {
-                    ModelInspector(local: local)
-                } else {
-                    EmptyState(title: "No selection", message: "Select a model to inspect it.", symbol: "shippingbox")
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Palette.canvas)
-            .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
+            inspector
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Palette.canvas)
+                .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
         }
-        .sheet(isPresented: Bindable(model).presentingDownload) { DownloadSheet() }
+        // Keyed by the text: typing again cancels the pending search.
+        .task(id: searchesHub ? query : "") {
+            // Ready and Downloading keep the last results for coming back.
+            if searchesHub { await hub.search(query, on: model) }
+        }
+        .onChange(of: scope, initial: true) { _, scope in
+            if scope == .hub { searchFocus += 1 }
+        }
+        .onChange(of: rows.map(\.id)) { reselect() }
         .onAppear { selection = selection ?? initialSelection }
     }
 
-    private var rows: [LocalModel] {
-        model.models
-            .filter { filter != .ready || [.available, .loaded].contains(model.displayState(of: $0)) }
-            .filter { query.isEmpty || $0.repoID.localizedCaseInsensitiveContains(query) || $0.selector.localizedCaseInsensitiveContains(query) }
-            .sorted { lhs, rhs in
-                let left = model.displayState(of: lhs) == .loaded, right = model.displayState(of: rhs) == .loaded
-                if left != right { return left }
-                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
-            }
-    }
-
-    private var table: some View {
-        Table(rows, selection: $selection) {
-            TableColumn("Name") { local in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(local.displayName).fontWeight(.medium)
-                    Text([local.owner, local.modelClass, local.encoding].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 3)
-            }
-            TableColumn("Features") { local in FeatureChips(features: local.features) }
-                .width(min: 120, ideal: 170)
-            TableColumn("Size") { local in Text(Format.bytes(local.sizeBytes)).font(.mono(12)) }
-                .width(80)
-            TableColumn("Status") { local in ModelStatus(local: local) }
-                .width(min: 120, ideal: 170)
-        }
-        .alternatingRowBackgrounds(.disabled)
-        .paletteBackground()
-        .overlay {
-            if model.models.isEmpty {
-                EmptyState(title: "No local models", message: "Download a checkpoint from Hugging Face to get started.", symbol: "shippingbox")
-            }
-        }
-    }
-}
-
-struct ModelStatus: View {
-    @Environment(AppModel.self) private var model
-    let local: LocalModel
-
-    var body: some View {
-        if let load = model.loads[local.selector] {
-            HStack(spacing: 6) {
-                if let fraction = load.fraction {
-                    ProgressView(value: fraction).frame(width: 60)
-                } else {
-                    ProgressView().controlSize(.small)
-                }
-                Text(load.phase.replacingOccurrences(of: "_", with: " ")).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-        } else if case .unavailable(let reason) = local.loadability {
-            Pill(text: reason.isEmpty ? "Unsupported" : reason, color: Palette.danger).help(reason).lineLimit(1)
+    /// Keeps the selection on a shown row: a download's row becomes its
+    /// model's once the server lists it, and a filter that hides the
+    /// selected row selects the first one shown, so the inspector never
+    /// describes a row the table does not show.
+    private func reselect() {
+        guard let selected = selection else { return }
+        let rows = rows
+        if rows.contains(where: { $0.id == selected }) { return }
+        if let repoID = ModelRow.downloadRepo(of: selected) ?? ModelRow.hubRepo(of: selected),
+           let listed = model.models.first(where: { $0.repoID == repoID }) {
+            selection = listed.selector
+        } else if let repoID = ModelRow.hubRepo(of: selected), model.downloads[repoID] != nil {
+            selection = ModelRow.downloadID(repoID)
         } else {
-            Pill(text: model.displayState(of: local).label, color: model.displayState(of: local).color)
+            selection = rows.first?.id
         }
     }
-}
 
-/// Active Hugging Face transfers.
-struct DownloadsList: View {
-    @Environment(AppModel.self) private var model
+    private var searching: Bool { searchesHub && hub.phase == .searching }
 
-    var body: some View {
-        let transfers = model.transfers.values.sorted { $0.repoID < $1.repoID }
-        if transfers.isEmpty {
-            EmptyState(title: "No downloads", message: "Downloads started from this app appear here.", symbol: "arrow.down.circle")
-        } else {
-            List(transfers, id: \.repoID) { transfer in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(transfer.repoID).fontWeight(.medium)
-                        Spacer()
-                        Text(transfer.phase.label).foregroundStyle(.secondary)
-                    }
-                    ProgressView(value: transfer.fraction ?? 0)
-                    Text(progressText(transfer)).font(.mono(11)).foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
+    @ViewBuilder private var empty: some View {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        if searchesHub, hub.phase == .waiting || hub.phase == .searching {
+            VStack(spacing: 10) {
+                ProgressView()
+                Text("Searching Hugging Face for “\(trimmed)”…").foregroundStyle(.secondary)
             }
-            .paletteBackground()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if searchesHub, case .failed(let message) = hub.phase {
+            EmptyState(title: "Search failed", message: message, symbol: "exclamationmark.triangle")
+        } else if !trimmed.isEmpty {
+            EmptyState(
+                title: "No matches",
+                message: searchesHub ? "Nothing here or on Hugging Face matches “\(trimmed)”." : "No model here matches “\(trimmed)”.",
+                symbol: "magnifyingglass"
+            )
+        } else {
+            switch scope {
+            case .hub:
+                EmptyState(title: "Search Hugging Face", message: "Type a model name, for example mlx-community Qwen3.", symbol: "magnifyingglass")
+            case .downloading:
+                EmptyState(title: "No downloads", message: "Downloads from any client of this server appear here.", symbol: "arrow.down.circle")
+            case .ready:
+                EmptyState(title: "No models ready", message: "Downloaded models this server can load appear here.", symbol: "shippingbox")
+            case .all:
+                EmptyState(title: "No models", message: "Type in the search field to find a model on Hugging Face.", symbol: "shippingbox")
+            }
         }
     }
 
-    private func progressText(_ transfer: TransferProgress) -> String {
-        let total = transfer.totalBytes.map { " / \(Format.bytes($0))" } ?? ""
-        return "\(Format.bytes(transfer.downloadedBytes))\(total)"
+    @ViewBuilder private var inspector: some View {
+        if let selection, let local = model.model(selector: selection) {
+            ModelInspector(local: local)
+        } else if let repoID = selection.flatMap(ModelRow.downloadRepo(of:)), let download = model.downloads[repoID] {
+            DownloadInspector(download: download)
+        } else if let repoID = selection.flatMap(ModelRow.hubRepo(of:)), let result = hub.results.first(where: { $0.id == repoID }) {
+            HubInspector(result: result, download: download)
+        } else {
+            EmptyState(title: "No selection", message: "Select a model to inspect it.", symbol: "shippingbox")
+        }
+    }
+
+    /// Starts the download and returns to the models, where its row shows
+    /// the progress.
+    private func download(_ repoID: String) {
+        model.pull(repoID)
+        let listed = model.models.first { $0.repoID == repoID }
+        selection = listed?.selector ?? ModelRow.downloadID(repoID)
+        query = ""
+        model.modelScope = .all
     }
 }
 

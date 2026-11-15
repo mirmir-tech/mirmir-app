@@ -1,0 +1,20 @@
+MiRMiR is a native runtime for large language models. The app needs no account and no sign-in. Everything runs on the Mac under review.
+
+HOW TO TEST (about 10 minutes, mostly the download)
+1. Launch MiRMiR. The main window opens, and the app also places an icon in the menu bar. It has no Dock icon by design; the menu bar icon is the app. Quit from its panel (Quit Mirmir, Cmd-Q).
+2. Click the menu bar icon and choose Download a Model. Search for Qwen/Qwen3-4B, a public model of about 8 GB, and download it.
+3. Load the model from Models, then open Chat (Cmd-N) and send a message. The reply streams with its reasoning, token count and speed.
+4. Overview (Cmd-1) shows throughput and memory while the model generates. The menu bar icon shows the generation speed.
+
+WHAT THE APP DOES IN THE BACKGROUND (all of it documented in the app)
+- It bundles the MiRMiR runtime as a helper (Contents/Helpers/mirmir) and starts it as a child process. The helper inherits the app's sandbox and keeps its data in the app's container. Quitting the app stops it.
+- The helper serves an OpenAI-compatible HTTP API on 127.0.0.1:18080 so that the user's own tools can use the loaded model. The address is shown in Settings > Server.
+- Remote Access (Instances > This Mac > Remote Access) is off by default. When the user turns it on, the helper listens for TLS connections from other machines and accepts only API keys the user creates. This is why the app has the network server entitlement.
+- Instances > Add Server connects to MiRMiR servers the user runs on other machines, over TLS with an API key kept in the Keychain. Testing it needs a second machine running MiRMiR; it is optional for review.
+- Model folders (Settings > Model folders) are user-selected folders kept as security-scoped bookmarks.
+- Network use: Hugging Face (model search and downloads requested by the user) and the servers the user adds. No analytics or tracking.
+
+Downloaded files are model weights (data). The app does not download or run executable code. Metal kernels are compiled at run time from Metal source that ships inside the app.
+
+Requirements: Apple silicon, macOS 27 or later. Models need memory: Qwen/Qwen3-4B needs about 10 GB free.
+

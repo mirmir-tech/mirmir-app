@@ -48,4 +48,21 @@ struct LoadedModelTests {
         #expect(busy.liveDecode == 45 && busy.livePrefill == 70)
         #expect(idle.liveDecode == nil && idle.livePrefill == nil)
     }
+
+    @Test func runningPullIsADownloadNotAFailure() throws {
+        let model = AppModel.preview()
+        let partial = try #require(model.models.first { !$0.repoID.isEmpty })
+        #expect(model.download(of: partial) == nil)
+        let now = Date()
+        model.apply(Activity(
+            id: "p", kind: .pull, target: partial.repoID, state: .running, stage: "downloading", detail: "",
+            startedAt: now, updatedAt: now, cancellable: true, progress: ActivityProgress(current: 25, total: 100)
+        ), from: try #require(model.connection))
+        #expect(model.download(of: partial)?.fraction == 0.25)
+        model.apply(Activity(
+            id: "p", kind: .pull, target: partial.repoID, state: .completed, stage: "completed", detail: "",
+            startedAt: now, updatedAt: now, cancellable: false, progress: nil
+        ), from: try #require(model.connection))
+        #expect(model.download(of: partial) == nil)
+    }
 }

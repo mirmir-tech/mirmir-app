@@ -33,6 +33,6 @@
     <key>NSLocalNetworkUsageDescription</key>
     <string>Mirmir connects to mirmir servers on your local network, such as another Mac or a GPU workstation.</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Apache-2.0</string>
+    <string>© 2026 Bazyli Zygan. Apache License 2.0.</string>
 </dict>
 </plist>

@@ -37,7 +37,7 @@ struct Sidebar: View {
         case .models: model.models.count
         case .instances: model.instances.count
         case .sessions: model.activeOperations.count
-        case .overview, .logs: 0
+        case .overview, .logs, .configuration: 0
         }
     }
 }
@@ -51,6 +51,7 @@ extension SidebarSection {
         case .instances: "server.rack"
         case .sessions: "list.bullet"
         case .logs: "doc.text"
+        case .configuration: "slider.horizontal.3"
         }
     }
 }

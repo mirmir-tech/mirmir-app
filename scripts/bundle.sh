@@ -19,7 +19,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-version="${MIRMIR_APP_VERSION:-0.6.0}"
+version="${MIRMIR_APP_VERSION:-0.6.1}"
 build="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 derived="build/DerivedData"
 

@@ -1,0 +1,1 @@
+Language models on your own Mac, with live stats, a menu bar panel and an OpenAI-compatible API. No account, no cloud, no tracking.

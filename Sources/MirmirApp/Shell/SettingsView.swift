@@ -2,8 +2,18 @@ import AppKit
 import MirmirKit
 import SwiftUI
 
+/// The Settings window: what this app itself keeps. A server's own
+/// configuration is a screen of the main window, next to its models.
 struct SettingsView: View {
+    var body: some View {
+        GeneralSettingsView()
+    }
+}
+
+/// Model folders the bundled server may read, and where it runs.
+struct GeneralSettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Form {
@@ -36,6 +46,11 @@ struct SettingsView: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section("Server") {
+                LabeledContent("Configuration") {
+                    Button("Open Configuration…") {
+                        MainWindow.show(.configuration, model: model, openWindow: openWindow)
+                    }
+                }
                 LabeledContent("Runtime", value: "Bundled mirmir")
                 LabeledContent("OpenAI-compatible API", value: "http://\(ServerSupervisor.httpBind)/v1").font(.mono(11))
                     .textSelection(.enabled)
@@ -77,7 +92,7 @@ struct SettingsView: View {
         }
     }
 
-        private func summary(_ kind: ModelFolder.Kind) -> String {
+    private func summary(_ kind: ModelFolder.Kind) -> String {
         switch kind {
         case .huggingFaceCache: "Hugging Face cache: its models are listed in Models"
         case .folder: "Folder: load its models with Models → Load from Folder"
@@ -103,5 +118,5 @@ struct SettingsView: View {
 }
 
 #if DEBUG
-#Preview("Settings") { SettingsView().previewModel() }
+#Preview("Settings") { GeneralSettingsView().previewModel() }
 #endif

@@ -28,6 +28,7 @@ struct RootView: View {
         case .instances: InstancesView()
         case .sessions: ConnectedOr { SessionsView() }
         case .logs: LogsView()
+        case .configuration: ConnectedOr { ConfigurationView() }
         }
     }
 }

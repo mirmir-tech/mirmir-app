@@ -1,0 +1,1 @@
+model językowy,offline,prywatny,czat,chatbot,asystent,serwer,api,gpu,metal,sztuczna inteligencja
