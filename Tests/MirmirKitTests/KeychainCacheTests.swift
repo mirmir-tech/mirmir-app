@@ -109,5 +109,20 @@ struct KeychainCacheTests {
         // The shared item, then the first old item; the refusal ends it.
         #expect(items.reads - reads == 2)
     }
+    @Test func aRefusedOldItemKeepsTheKeysAlreadyRead() throws {
+        let items = FakeItems()
+        let (lab, home) = (UUID(), UUID())
+        try KeychainCredentials(items: items).setKey("mmk_lab", for: lab)
+        try items.write(Data("mmk_home".utf8), to: home.uuidString)
+        items.store.withLock { $0.refused = [home.uuidString] }
+        let launch = KeychainCredentials(items: items)
+        #expect(launch.key(for: lab) == "mmk_lab")
+        #expect(launch.key(for: home) == nil)
+        // Probing the refused server does not cost the other one its key.
+        #expect(launch.key(for: lab) == "mmk_lab")
+        let reads = items.reads
+        #expect(launch.key(for: UUID()) == nil)
+        #expect(items.reads == reads)
+    }
 }
 #endif

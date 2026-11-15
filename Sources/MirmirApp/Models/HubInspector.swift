@@ -98,3 +98,26 @@ struct DownloadProgressCard: View {
         return "\(done) of \(Format.bytes(total))\(percent)"
     }
 }
+
+/// An incomplete download nobody is running: resume it, or remove its files.
+struct PausedDownloadCard: View {
+    @Environment(AppModel.self) private var model
+    let local: LocalModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Download incomplete").font(.system(size: 12, weight: .semibold))
+            InspectorNote("The download stopped before it finished. Resume it to load the model.")
+            HStack {
+                Button("Resume Download") { model.pull(local.repoID) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(local.repoID.isEmpty || model.connection == nil)
+                Spacer()
+                if local.managed, !local.repoID.isEmpty {
+                    Button("Remove", role: .destructive) { model.removeCheckpoint(local.repoID) }
+                }
+            }
+        }
+        .card(padding: 12)
+    }
+}

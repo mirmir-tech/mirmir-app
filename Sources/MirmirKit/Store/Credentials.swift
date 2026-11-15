@@ -58,16 +58,13 @@ public final class KeychainCredentials: CredentialStore {
     /// The account of the item holding every key.
     static let bundleAccount = "keys"
 
-    private enum State {
-        case unread
-        case read([UUID: String])
-        /// The user refused the Keychain: no further prompts this launch,
-        /// and nothing is written over the item.
-        case refused
-    }
-
     private struct Cache {
-        var state = State.unread
+        /// The shared item's keys, once read; they stay usable for the
+        /// launch whatever is refused later.
+        var keys: [UUID: String]?
+        /// The user refused a Keychain read: no further prompts this
+        /// launch, and nothing is written over an item that was not read.
+        var refused = false
         /// Servers whose pre-0.6.1 item was looked for.
         var looked: Set<UUID> = []
     }
@@ -81,22 +78,21 @@ public final class KeychainCredentials: CredentialStore {
 
     public func key(for instance: UUID) -> String? {
         cache.withLock { cache in
-            guard case .read(var keys) = load(&cache) else { return nil }
+            guard var keys = shared(&cache) else { return nil }
             if let key = keys[instance] { return key }
-            guard cache.looked.insert(instance).inserted else { return nil }
+            guard !cache.refused, cache.looked.insert(instance).inserted else { return nil }
             let data: Data?
             do {
                 data = try items.read(instance.uuidString)
             } catch {
-                // Refused like the shared item: no more prompts this launch.
-                cache.state = .refused
+                cache.refused = true
                 return nil
             }
             guard let data, let key = String(data: data, encoding: .utf8) else { return nil }
             // Kept for this launch even when it cannot be saved; the old
             // item goes only once the shared one holds the key.
             keys[instance] = key
-            cache.state = .read(keys)
+            cache.keys = keys
             if (try? save(keys)) != nil { items.delete(instance.uuidString) }
             return key
         }
@@ -104,12 +100,13 @@ public final class KeychainCredentials: CredentialStore {
 
     public func setKey(_ key: String, for instance: UUID) throws {
         try cache.withLock { cache in
-            // Saving is the user's own action: ask again after a refusal.
-            if case .refused = cache.state { cache.state = .unread }
-            guard case .read(var keys) = load(&cache) else { throw KeychainError(status: errSecAuthFailed) }
+            // Saving is the user's own action: an unread shared item is
+            // asked for again after a refusal.
+            if cache.keys == nil { cache.refused = false }
+            guard var keys = shared(&cache) else { throw KeychainError(status: errSecAuthFailed) }
             keys[instance] = key
             try save(keys)
-            cache.state = .read(keys)
+            cache.keys = keys
             cache.looked.insert(instance)
             items.delete(instance.uuidString)
         }
@@ -117,23 +114,26 @@ public final class KeychainCredentials: CredentialStore {
 
     public func removeKey(for instance: UUID) {
         cache.withLock { cache in
-            if case .read(var keys) = load(&cache), keys.removeValue(forKey: instance) != nil, (try? save(keys)) != nil {
-                cache.state = .read(keys)
+            if var keys = shared(&cache), keys.removeValue(forKey: instance) != nil, (try? save(keys)) != nil {
+                cache.keys = keys
             }
             items.delete(instance.uuidString)
         }
     }
 
-    private func load(_ cache: inout Cache) -> State {
-        guard case .unread = cache.state else { return cache.state }
+    /// The shared item's keys, read on first use; nil once refused.
+    private func shared(_ cache: inout Cache) -> [UUID: String]? {
+        if let keys = cache.keys { return keys }
+        guard !cache.refused else { return nil }
         do {
             let data = try items.read(Self.bundleAccount)
             let keys = try data.map { try JSONDecoder().decode([UUID: String].self, from: $0) } ?? [:]
-            cache.state = .read(keys)
+            cache.keys = keys
+            return keys
         } catch {
-            cache.state = .refused
+            cache.refused = true
+            return nil
         }
-        return cache.state
     }
 
     private func save(_ keys: [UUID: String]) throws {

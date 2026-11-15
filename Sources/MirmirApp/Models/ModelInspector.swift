@@ -30,6 +30,8 @@ struct ModelInspector: View {
                 if let download {
                     // A partial checkpoint has nothing to load or inspect yet.
                     DownloadProgressCard(download: download)
+                } else if state == .paused {
+                    PausedDownloadCard(local: local)
                 } else {
                     // Its own view with its own drafts, keyed by the model: a
                     // binding into an optional here would be read after a
@@ -41,12 +43,16 @@ struct ModelInspector: View {
             .padding(16)
         }
         .task(id: Refresh(selector: local.selector, state: state, loadability: local.loadability, downloading: download != nil)) {
-            guard download == nil else { return }
+            guard download == nil, state != .paused else { return }
             await model.inspect(local.selector)
         }
     }
 
-    private var details: some View {
+    @ViewBuilder private var details: some View {
+        if state != .paused { facts }
+    }
+
+    private var facts: some View {
         InspectorSection("Model") {
             InspectorRow("Class", value: local.modelClass)
             InspectorRow("Encoding", value: local.encoding)

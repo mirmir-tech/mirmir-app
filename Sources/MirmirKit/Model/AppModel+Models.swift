@@ -65,11 +65,13 @@ extension AppModel {
         return downloads.values.filter { !listed.contains($0.repoID) }.sorted { $0.repoID < $1.repoID }
     }
 
-    /// Whether the server lists the search result's repository now. Kept
-    /// search results carry the state of their search; this follows
-    /// downloads and removals since.
+    /// Whether the server has the search result's checkpoint now, complete.
+    /// Kept search results carry the state of their search; this follows
+    /// downloads and removals since. A paused (incomplete) download or a
+    /// missing checkpoint is listed but not downloaded, so it can be
+    /// downloaded again; an unsupported complete one is downloaded.
     public func isDownloaded(_ result: CatalogModel) -> Bool {
-        models.contains { $0.repoID == result.id }
+        models.contains { $0.repoID == result.id && $0.state.isOnDisk }
     }
 
     /// The running download of the model's repository.

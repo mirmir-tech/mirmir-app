@@ -10,6 +10,15 @@ public enum LocalModelState: Hashable, Sendable {
     case error
     case unrecognized(String)
 
+    /// The checkpoint is complete on disk: not a paused download, not
+    /// missing.
+    public var isOnDisk: Bool {
+        switch self {
+        case .paused, .missing: false
+        case .loaded, .loading, .available, .error, .unrecognized: true
+        }
+    }
+
     public var label: String {
         switch self {
         case .loaded: "Loaded"

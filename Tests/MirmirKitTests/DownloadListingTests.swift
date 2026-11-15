@@ -70,6 +70,16 @@ struct DownloadListingTests {
         #expect(model.isDownloaded(result(listed.repoID)))
         // Marked downloaded when searched, removed since.
         #expect(!model.isDownloaded(result(Self.repo)))
+        // Listed but incomplete or gone: downloadable again.
+        for state in [LocalModelState.paused, .missing] {
+            let partial = LocalModel(
+                selector: Self.repo, repoID: Self.repo, commit: "", path: "", state: state,
+                loadability: .unavailable(reason: "Download incomplete; resume or remove it"), modelClass: "",
+                encoding: "", container: "", sizeBytes: 0, features: [], imageInput: false, managed: true, recentRank: nil
+            )
+            model.models = model.models.filter { $0.repoID != Self.repo } + [partial]
+            #expect(!model.isDownloaded(result(Self.repo)))
+        }
     }
 
     @Test func inspectionTasksAreTyped() {
