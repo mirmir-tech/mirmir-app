@@ -24,9 +24,11 @@ struct ScopeTabs: NSViewRepresentable {
         for (index, item) in Self.scopes.enumerated() {
             control.setLabel(item.title, forSegment: index)
             let text = (item.title as NSString).size(withAttributes: [.font: font]).width
-            // The title stays centred: the pill's room is kept on both sides.
-            let room = item == .downloading ? 2 * BadgeSegmentedControl.reserved : 0
-            control.setWidth((text + 24 + room).rounded(.up), forSegment: index)
+            // Every segment gets a little more room than its title needs, and
+            // Downloading the pill's on top: its centred title then sits only
+            // a few points further from its edges than the others'.
+            let room = item == .downloading ? BadgeSegmentedControl.reserved : 0
+            control.setWidth((text + 32 + room).rounded(.up), forSegment: index)
         }
         control.badgeSegment = Self.scopes.firstIndex(of: .downloading)
         return control
@@ -62,8 +64,8 @@ struct ScopeTabs: NSViewRepresentable {
 /// segment. The pill is a subview: the toolbar draws the control with a cell
 /// of its own, and a custom cell class draws it dimmed, without selection.
 final class BadgeSegmentedControl: NSSegmentedControl {
-    /// Width kept free for the pill, sized for "9+".
-    static let reserved: CGFloat = 28
+    /// Extra width for the pill, sized for "9+" beside the centred title.
+    static let reserved: CGFloat = 22
     var badgeSegment: Int?
     var badge: String? {
         didSet {
@@ -92,7 +94,7 @@ final class BadgeSegmentedControl: NSSegmentedControl {
         // Segments are centred in the bounds; the pill ends 6 pt inside
         // the trailing edge of its segment.
         let inset = (bounds.width - widths.reduce(0, +)) / 2
-        let trailing = inset + widths[0...segment].reduce(0, +) - 6
+        let trailing = inset + widths[0...segment].reduce(0, +) - 5
         let size = pill.intrinsicContentSize
         pill.frame = NSRect(x: trailing - size.width, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
     }
@@ -109,13 +111,13 @@ final class BadgePill: NSView {
     var text: String? { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
 
     private static let attributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold),
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
         .foregroundColor: NSColor.white,
     ]
 
     override var intrinsicContentSize: NSSize {
         let width = ((text ?? "") as NSString).size(withAttributes: Self.attributes).width
-        return NSSize(width: max(width + 10, 16), height: 16)
+        return NSSize(width: max(width + 8, 14), height: 14)
     }
 
     override func draw(_ dirtyRect: NSRect) {
