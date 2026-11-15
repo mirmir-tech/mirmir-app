@@ -8,6 +8,8 @@
 #   MIRMIR_SIGN_IDENTITY   code signing identity (default "Developer ID Application")
 #   MIRMIR_TEAM_ID         team of that identity (default 5AH2Q9L8R2)
 #   MIRMIR_NOTARY_PROFILE  notarytool keychain profile (default mirmir-notary)
+#   MIRMIR_CARGO_PROFILE   cargo profile of the bundled server (default app-lto,
+#                          see scripts/xcode-helper.sh)
 #
 # Create the notarytool profile once:
 #   xcrun notarytool store-credentials mirmir-notary \
@@ -60,6 +62,7 @@ build_number="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 identity="${MIRMIR_SIGN_IDENTITY:-Developer ID Application}"
 team="${MIRMIR_TEAM_ID:-5AH2Q9L8R2}"
 profile="${MIRMIR_NOTARY_PROFILE:-mirmir-notary}"
+export MIRMIR_CARGO_PROFILE="${MIRMIR_CARGO_PROFILE:-app-lto}"
 volume="Mirmir"
 out="build/release"
 work="$out/work"

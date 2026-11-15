@@ -20,7 +20,9 @@
 #
 #   MIRMIR_HELPER=skip       do not build or embed the runtime (no local server)
 #   MIRMIR_CARGO_PROFILE=dev build an unoptimized server (default: app, release
-#                          without symbols; `release` keeps them)
+#                          without symbols; `release` keeps them; `app-lto`,
+#                          set by scripts/release.sh, adds whole-program
+#                          optimization: smaller, three times slower to build)
 set -euo pipefail
 
 app_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -40,6 +42,7 @@ fi
 profile="${MIRMIR_CARGO_PROFILE:-app}"
 case "$profile" in
     app) out_dir=app ;;
+    app-lto) out_dir=app-lto ;;
     release) out_dir=release ;;
     dev | debug) profile=dev; out_dir=debug ;;
     *) echo "error: unsupported MIRMIR_CARGO_PROFILE=$profile" >&2; exit 1 ;;
