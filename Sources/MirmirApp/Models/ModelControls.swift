@@ -27,23 +27,20 @@ struct ModelControls: View {
     private var busy: Bool { saving || model.loads[local.selector] != nil }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
+            actions
             if let context {
                 ContextSection(
                     context: context, choice: choiceBinding(context), unsaved: edited != nil,
-                    loaded: state == .loaded, busy: busy, save: save, reload: reload
+                    loaded: state == .loaded, busy: busy, memory: memory, pendingEstimate: pendingEstimate,
+                    save: save, reload: reload
                 )
+            } else if let memory {
+                InspectorSection("Memory") { MemoryEstimateView(memory: memory) }
             }
-            if let saved = inspection?.memory {
-                // An unsaved choice shows the last estimate, dimmed, until
-                // its own arrives.
-                let current = edited == nil || candidate?.choice == edited
-                MemoryEstimateView(memory: edited == nil ? saved : candidate?.memory ?? saved, context: context, pending: !current)
-            }
-            if let inspection {
+            if let inspection, inspection.task.generates {
                 GenerationDefaultsForm(selector: local.selector, saved: inspection.settings, maxTokensLimit: maxTokensLimit(inspection))
             }
-            actions
         }
         // Debounced: a drag re-inspects once it rests, and a newer choice
         // cancels the older request, so a stale estimate is never shown.
@@ -61,6 +58,15 @@ struct ModelControls: View {
             if edited == saved { edited = nil }
         }
     }
+
+    /// The estimate to show: an unsaved choice shows the last estimate,
+    /// dimmed, until its own arrives.
+    private var memory: MemoryEstimate? {
+        guard let saved = inspection?.memory else { return nil }
+        return edited == nil ? saved : candidate?.memory ?? saved
+    }
+
+    private var pendingEstimate: Bool { edited != nil && candidate?.choice != edited }
 
     private func choiceBinding(_ context: ModelContext) -> Binding<ContextChoice> {
         Binding(
@@ -90,20 +96,38 @@ struct ModelControls: View {
         model.reload(local.selector, serving: model.servingSelector(for: local), context: edited)
     }
 
-    private var actions: some View {
-        HStack {
-            if state == .loaded {
-                Button("Unload", role: .destructive) { model.unload(model.servingSelector(for: local)) }
+    @ViewBuilder private var actions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if state == .loaded {
+                    Button("Unload") { model.unload(model.servingSelector(for: local)) }
+                        .disabled(busy)
+                } else {
+                    Button("Load") { model.load(local.selector, context: choice) }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(local.loadability != .loadable || busy)
+                }
+                if let load = model.loads[local.selector] {
+                    ProgressView(value: load.fraction).frame(maxWidth: 90)
+                    Text(load.phase.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                if local.managed, state != .loaded, !local.repoID.isEmpty {
+                    Menu {
+                        Button("Remove from Disk", role: .destructive) { model.removeCheckpoint(local.repoID) }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("More")
                     .disabled(busy)
-            } else {
-                Button("Load") { model.load(local.selector, context: choice) }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(local.loadability != .loadable || busy)
+                }
             }
-            Spacer()
-            if local.managed, state != .loaded, !local.repoID.isEmpty {
-                Button("Remove from Disk", role: .destructive) { model.removeCheckpoint(local.repoID) }
-                    .disabled(model.download(of: local) != nil)
+            if case .unavailable(let reason) = local.loadability, !reason.isEmpty {
+                InspectorNote(reason, color: Palette.danger)
             }
         }
     }

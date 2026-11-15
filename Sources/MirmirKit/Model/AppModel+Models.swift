@@ -37,13 +37,43 @@ extension AppModel {
         activeSelector(for: local) != nil ? .loaded : local.state
     }
 
-    /// The running download of the model's repository: one this app started,
-    /// or a server pull from any client, such as the CLI.
+    /// Running downloads by repository: those this app started, and server
+    /// pulls from any client, such as the CLI or another Mac.
+    public var downloads: [String: ModelDownload] {
+        var downloads: [String: ModelDownload] = [:]
+        for pull in activities.values where pull.kind == .pull && pull.state.isActive && !pull.target.isEmpty {
+            downloads[pull.target] = ModelDownload(
+                repoID: pull.target, stage: pull.stage.replacingOccurrences(of: "_", with: " ").capitalized,
+                downloadedBytes: pull.progress?.current, totalBytes: pull.progress?.total,
+                cancellableOperation: pull.cancellable ? pull.id : nil
+            )
+        }
+        for (repoID, transfer) in transfers {
+            downloads[repoID] = ModelDownload(
+                repoID: repoID, stage: transfer.phase.label,
+                downloadedBytes: transfer.downloadedBytes, totalBytes: transfer.totalBytes,
+                cancellableOperation: downloads[repoID]?.cancellableOperation
+            )
+        }
+        return downloads
+    }
+
+    /// Downloads whose checkpoint the server does not list yet, newest
+    /// repository name first.
+    public var unlistedDownloads: [ModelDownload] {
+        let listed = Set(models.map(\.repoID))
+        return downloads.values.filter { !listed.contains($0.repoID) }.sorted { $0.repoID < $1.repoID }
+    }
+
+    /// The running download of the model's repository.
     public func download(of local: LocalModel) -> ModelDownload? {
         guard !local.repoID.isEmpty else { return nil }
-        if let transfer = transfers[local.repoID] { return ModelDownload(fraction: transfer.fraction) }
-        let pull = activities.values.first { $0.kind == .pull && $0.target == local.repoID && $0.state.isActive }
-        return pull.map { ModelDownload(fraction: $0.progress?.fraction) }
+        return downloads[local.repoID]
+    }
+
+    public func cancel(_ download: ModelDownload) {
+        guard let connection, let operation = download.cancellableOperation else { return }
+        Task { _ = try? await connection.cancel(operationID: operation) }
     }
 
     /// The selector to send for generation and unload: the one the server
@@ -106,8 +136,10 @@ extension AppModel {
             } catch {
                 report(error, "Downloading \(repoID) failed", from: connection)
             }
-            if isCurrent(connection) { transfers[repoID] = nil }
+            // List the checkpoint before its transfer goes, so its row
+            // never disappears in between.
             try? await refreshModels(connection)
+            if isCurrent(connection) { transfers[repoID] = nil }
         }
     }
 
@@ -129,6 +161,10 @@ extension AppModel {
     }
 
     func setTransfer(_ repoID: String, _ progress: TransferProgress, from connection: RuntimeConnection) {
-        if isCurrent(connection) { transfers[repoID] = progress }
+        guard isCurrent(connection) else { return }
+        // The server lists a checkpoint once its first files arrive: look
+        // for it whenever the transfer moves to another phase.
+        if transfers[repoID]?.phase != progress.phase { refreshModelsSoon = true }
+        transfers[repoID] = progress
     }
 }

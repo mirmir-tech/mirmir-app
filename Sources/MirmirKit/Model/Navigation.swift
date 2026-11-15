@@ -18,6 +18,23 @@ public enum SidebarSection: String, CaseIterable, Identifiable, Hashable, Sendab
     }
 }
 
+/// What the Models screen lists: this server's models, all or filtered by
+/// state, or Hugging Face search results for a download.
+public enum ModelScope: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case all, ready, downloading, hub
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .all: "All"
+        case .ready: "Ready"
+        case .downloading: "Downloading"
+        case .hub: "Hugging Face"
+        }
+    }
+}
+
 public enum TimeRange: String, CaseIterable, Identifiable, Hashable, Sendable {
     case fiveMinutes, hour, day
 

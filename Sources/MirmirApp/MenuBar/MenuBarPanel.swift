@@ -97,7 +97,7 @@ struct MenuBarPanel: View {
             PanelAction(title: "Models…", symbol: "shippingbox", key: "⌘2") { show(.models) }
             PanelAction(title: "Instances…", symbol: "server.rack", key: "⌘3") { show(.instances) }
             PanelAction(title: "Download a Model…", symbol: "arrow.down.to.line") {
-                model.presentingDownload = true
+                model.modelScope = .hub
                 show(.models)
             }
             .disabled(model.connection == nil)

@@ -25,38 +25,21 @@ struct GenerationDefaultsForm: View {
     private var bounded: GenerationSettings { draft.boundingMaxTokens(by: maxTokensLimit) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Generation defaults").font(.system(size: 12, weight: .semibold))
-            // A card like the facts and memory above, not a grouped Form,
-            // whose system background does not match the palette.
-            VStack(spacing: 0) {
-                row("Max tokens") { maxTokensSlider }
-                Divider()
-                row("Temperature") { slider($draft.temperature, in: 0...2, step: 0.05) }
-                Divider()
-                row("Top P") { slider($draft.topP, in: 0...1, step: 0.01) }
-                Divider()
-                row("Top K") {
-                    Text("\(draft.topK)").font(.mono(11)).foregroundStyle(.secondary)
-                    Stepper("Top K", value: $draft.topK, in: 0...200).labelsHidden()
+        InspectorSection(title: "Generation defaults") {
+            if bounded != saved {
+                HStack(spacing: 6) {
+                    Button("Revert") { draft = saved.boundingMaxTokens(by: maxTokensLimit) }
+                    Button("Save", action: save).buttonStyle(.borderedProminent)
                 }
-                Divider()
-                row("Repetition penalty") { slider($draft.repetitionPenalty, in: 0.5...2, step: 0.01) }
+                .controlSize(.small)
+                .disabled(saving)
             }
-            .card(padding: 0)
-            HStack {
-                Spacer()
-                Button("Save Defaults") {
-                    saving = true
-                    let settings = bounded
-                    draft = settings
-                    Task {
-                        await model.updateSettings(selector, settings)
-                        saving = false
-                    }
-                }
-                .disabled(saving || bounded == saved)
-            }
+        } content: {
+            setting("Max tokens", value: Format.grouped(draft.maxTokens)) { maxTokensSlider }
+            setting("Temperature", value: decimal(draft.temperature)) { slider($draft.temperature, in: 0...2, step: 0.05) }
+            setting("Top P", value: decimal(draft.topP)) { slider($draft.topP, in: 0...1, step: 0.01) }
+            setting("Top K", value: draft.topK == 0 ? "off" : "\(draft.topK)") { topKSlider }
+            setting("Repetition penalty", value: decimal(draft.repetitionPenalty)) { slider($draft.repetitionPenalty, in: 0.5...2, step: 0.01) }
         }
         // A save that the server applied comes back as the new saved value.
         .onChange(of: saved) { _, newValue in draft = newValue.boundingMaxTokens(by: maxTokensLimit) }
@@ -64,15 +47,29 @@ struct GenerationDefaultsForm: View {
         .onChange(of: maxTokensLimit) { _, limit in draft = draft.boundingMaxTokens(by: limit) }
     }
 
-    private func row<Control: View>(_ title: String, @ViewBuilder control: () -> Control) -> some View {
-        HStack(spacing: 10) {
-            Text(title).font(.system(size: 12)).lineLimit(1).layoutPriority(1)
-            Spacer(minLength: 8)
+    private func save() {
+        saving = true
+        let settings = bounded
+        draft = settings
+        Task {
+            await model.updateSettings(selector, settings)
+            saving = false
+        }
+    }
+
+    /// The setting's name and value above a full-width slider.
+    private func setting<Control: View>(_ title: String, value: String, @ViewBuilder control: () -> Control) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(.system(size: 12))
+                Spacer(minLength: 8)
+                Text(value).font(.mono(12, weight: .medium)).foregroundStyle(.secondary)
+            }
             control()
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 36)
     }
+
+    private func decimal(_ value: Float) -> String { String(format: "%.2f", value) }
 
     /// Logarithmic, so short replies get as much travel as long ones.
     private var maxTokensSlider: some View {
@@ -81,20 +78,18 @@ struct GenerationDefaultsForm: View {
             get: { scale.position(of: draft.maxTokens) },
             set: { draft.maxTokens = scale.value(at: $0) }
         )
-        return HStack(spacing: 8) {
-            Slider(value: position, in: 0...1).labelsHidden().controlSize(.small).frame(maxWidth: 120)
-            Text(Format.grouped(draft.maxTokens)).font(.mono(11)).foregroundStyle(.secondary)
-                .frame(width: 54, alignment: .trailing)
-        }
+        return Slider(value: position, in: 0...1).labelsHidden().controlSize(.small)
+    }
+
+    private var topKSlider: some View {
+        let value = Binding(get: { Double(draft.topK) }, set: { draft.topK = UInt64($0.rounded()) })
+        return Slider(value: value, in: 0...200).labelsHidden().controlSize(.small)
     }
 
     /// `Slider(step:)` draws a tick per step, a dotted line at fine steps;
     /// snap the value in the binding instead.
     private func slider(_ value: Binding<Float>, in range: ClosedRange<Float>, step: Float) -> some View {
         let snapped = Binding(get: { value.wrappedValue }, set: { value.wrappedValue = ($0 / step).rounded() * step })
-        return HStack(spacing: 8) {
-            Slider(value: snapped, in: range).labelsHidden().controlSize(.small).frame(maxWidth: 140)
-            Text(String(format: "%.2f", value.wrappedValue)).font(.mono(11)).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
-        }
+        return Slider(value: snapped, in: range).labelsHidden().controlSize(.small)
     }
 }

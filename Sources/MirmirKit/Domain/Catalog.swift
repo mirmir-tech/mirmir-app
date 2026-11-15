@@ -34,11 +34,34 @@ public enum TransferPhase: Hashable, Sendable {
     }
 }
 
-/// A download of a listed model's repository that is still running. Until it
-/// finishes the checkpoint is incomplete, which is progress, not an error.
+/// A running download of a repository: one this app started, or a server
+/// pull from any client. Until it finishes the checkpoint is incomplete,
+/// which is progress, not an error.
 public struct ModelDownload: Hashable, Sendable {
+    public let repoID: String
+    /// The server's stage, e.g. Resolving or Downloading.
+    public let stage: String
+    public let downloadedBytes: UInt64?
+    public let totalBytes: UInt64?
+    /// The server operation, when it can be cancelled.
+    public let cancellableOperation: String?
+
+    public init(repoID: String, stage: String, downloadedBytes: UInt64?, totalBytes: UInt64?, cancellableOperation: String? = nil) {
+        self.repoID = repoID
+        self.stage = stage
+        self.downloadedBytes = downloadedBytes
+        self.totalBytes = totalBytes
+        self.cancellableOperation = cancellableOperation
+    }
+
     /// Downloaded share of the repository, when its size is known.
-    public let fraction: Double?
+    public var fraction: Double? {
+        guard let downloadedBytes, let totalBytes, totalBytes > 0 else { return nil }
+        return min(1, Double(downloadedBytes) / Double(totalBytes))
+    }
+
+    /// The repository name without its owner.
+    public var displayName: String { repoID.split(separator: "/").last.map(String.init) ?? repoID }
 }
 
 public struct TransferProgress: Hashable, Sendable {

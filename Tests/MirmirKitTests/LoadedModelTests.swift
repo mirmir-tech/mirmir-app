@@ -58,7 +58,7 @@ struct LoadedModelTests {
             id: "p", kind: .pull, target: partial.repoID, state: .running, stage: "downloading", detail: "",
             startedAt: now, updatedAt: now, cancellable: true, progress: ActivityProgress(current: 25, total: 100)
         ), from: try #require(model.connection))
-        #expect(model.download(of: partial) == ModelDownload(fraction: 0.25))
+        #expect(model.download(of: partial)?.fraction == 0.25)
         model.apply(Activity(
             id: "p", kind: .pull, target: partial.repoID, state: .completed, stage: "completed", detail: "",
             startedAt: now, updatedAt: now, cancellable: false, progress: nil

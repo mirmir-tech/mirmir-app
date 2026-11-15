@@ -12,44 +12,56 @@ struct ContextSection: View {
     let loaded: Bool
     /// A load or save is under way.
     let busy: Bool
+    /// The memory the choice needs; `pendingEstimate` while it is on its way.
+    let memory: MemoryEstimate?
+    let pendingEstimate: Bool
     let save: () -> Void
     let reload: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Context").font(.system(size: 12, weight: .semibold))
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Automatic", isOn: automatic).toggleStyle(.switch).controlSize(.small).font(.system(size: 12))
-                Slider(value: position, in: 0...1).labelsHidden().controlSize(.small).disabled(choice == .automatic)
-                HStack(spacing: 6) {
-                    Text(readout).font(.mono(11, weight: .medium))
-                    Spacer(minLength: 8)
-                    if let resident = context.residentTokens {
-                        Text("Loaded with \(Format.grouped(resident))").font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
+        InspectorSection(title: "Context") {
+            Toggle("Automatic", isOn: automatic).toggleStyle(.switch).controlSize(.mini).font(.system(size: 11))
+                .disabled(busy)
+        } content: {
+            HStack(alignment: .firstTextBaseline) {
+                Text(readout).font(.mono(13, weight: .semibold))
+                Spacer(minLength: 8)
+                if let resident = context.residentTokens {
+                    Text("loaded with \(Format.grouped(resident))").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Text("\(Format.grouped(context.scale.lower)) to \(Format.grouped(context.scale.upper)) tokens")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            .disabled(busy)
-            .card(padding: 12)
-            if unsaved { pendingChange }
+            VStack(spacing: 2) {
+                Slider(value: position, in: 0...1).labelsHidden().controlSize(.small).disabled(choice == .automatic || busy)
+                HStack {
+                    Text(Format.grouped(context.scale.lower))
+                    Spacer()
+                    Text(Format.grouped(context.scale.upper))
+                }
+                .font(.mono(10)).foregroundStyle(.tertiary)
+            }
+            if let memory {
+                Divider().padding(.vertical, 2)
+                MemoryEstimateView(memory: memory, context: context, pending: pendingEstimate)
+            }
+            if unsaved {
+                Divider().padding(.vertical, 2)
+                pendingChange
+            }
         }
     }
 
     private var pendingChange: some View {
         HStack(spacing: 8) {
-            Text(loaded ? "Applies on the next load." : "Load saves it, or save it now.")
-                .font(.system(size: 11)).foregroundStyle(.secondary)
+            InspectorNote(loaded ? "Applies on the next load." : "Load saves it, or save it now.")
             Spacer(minLength: 8)
-            if loaded { Button("Reload", action: reload).disabled(busy) }
-            Button("Save", action: save).disabled(busy)
+            if loaded { Button("Reload", action: reload).controlSize(.small).disabled(busy) }
+            Button("Save", action: save).controlSize(.small).disabled(busy)
         }
     }
 
     private var readout: String {
         switch choice {
-        case .automatic: "Automatic · \(Format.grouped(context.automaticTokens)) tokens now"
+        case .automatic: "\(Format.grouped(context.automaticTokens)) tokens (automatic)"
         case .tokens(let tokens): "\(Format.grouped(tokens)) tokens"
         }
     }

@@ -149,7 +149,12 @@ extension AppModel {
 
     func apply(_ activity: Activity, from connection: RuntimeConnection) {
         guard isCurrent(connection) else { return }
-        activities[activity.id] = activity
+        let previous = activities.updateValue(activity, forKey: activity.id)
+        if activity.kind == .pull, activity.state.isActive, previous?.stage != activity.stage {
+            // A pull from any client: its checkpoint is listed once files
+            // arrive, so look for it as the pull moves on.
+            refreshModelsSoon = true
+        }
         if !activity.state.isActive {
             switch activity.kind {
             case .load, .unload, .pull, .remove, .restore: refreshModelsSoon = true

@@ -163,7 +163,7 @@ enum PreviewData {
                 availableBytes: budget, budgetBytes: budget, fit: required <= budget ? .fits : .doesNotFit,
                 maxSafeContextTokens: required <= budget ? 131_072 : 0, configuredCacheTokens: tokens
             ),
-            task: "text-generation", maxInputTokens: context.maxTokens, context: context
+            task: .generation, maxInputTokens: context.maxTokens, context: context
         )
     }
 

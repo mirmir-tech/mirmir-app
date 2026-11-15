@@ -124,11 +124,34 @@ public struct GenerationSettings: Hashable, Sendable {
     }
 }
 
+/// What a model does, decoded from `InspectModelResponse.task`.
+public enum ModelTask: Hashable, Sendable {
+    case generation, rerank, embedding
+    case unrecognized(String)
+
+    public init(wire: String) {
+        switch wire {
+        case "generation": self = .generation
+        case "rerank": self = .rerank
+        case "embedding": self = .embedding
+        default: self = .unrecognized(wire)
+        }
+    }
+
+    /// Generation defaults apply; an unknown task keeps them editable.
+    public var generates: Bool {
+        switch self {
+        case .rerank, .embedding: false
+        case .generation, .unrecognized: true
+        }
+    }
+}
+
 public struct ModelInspection: Hashable, Sendable {
     public let settings: GenerationSettings
     public let hasOverrides: Bool
     public let memory: MemoryEstimate?
-    public let task: String
+    public let task: ModelTask
     public let maxInputTokens: UInt64
     /// The context the model can be given; nil hides the control.
     public let context: ModelContext?
