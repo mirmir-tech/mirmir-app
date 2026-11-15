@@ -57,6 +57,21 @@ struct DownloadListingTests {
         #expect(download.cancellableOperation != nil)
     }
 
+    @Test func aKeptSearchResultFollowsTheServerList() throws {
+        let model = AppModel.preview()
+        let listed = try #require(model.models.first { !$0.repoID.isEmpty })
+        func result(_ id: String) -> CatalogModel {
+            CatalogModel(
+                id: id, downloads: 0, likes: 0, gated: false, modelClass: "", compatibility: "",
+                memoryFit: .unknown, estimatedRequiredBytes: nil, reason: "", downloaded: true,
+                features: [], encoding: ""
+            )
+        }
+        #expect(model.isDownloaded(result(listed.repoID)))
+        // Marked downloaded when searched, removed since.
+        #expect(!model.isDownloaded(result(Self.repo)))
+    }
+
     @Test func inspectionTasksAreTyped() {
         #expect(ModelTask(wire: "generation").generates)
         #expect(!ModelTask(wire: "rerank").generates)

@@ -16,8 +16,10 @@ struct ModelsTable: View {
         let app = model
         Table(rows, selection: $selection) {
             TableColumn("Name") { row in name(row) }
+                .width(min: 180, ideal: 300)
             TableColumn("Features") { row in FeatureChips(features: features(row)) }
-                .width(min: 120, ideal: 170)
+                // Room for all three chips; the rest goes to the name.
+                .width(min: 215, ideal: 215, max: 240)
             TableColumn("Size") { row in size(row) }
                 .width(80)
             TableColumn("Status") { row in status(row, app) }
@@ -76,7 +78,10 @@ struct ModelsTable: View {
         case .download(let download):
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
         case .hub(let result):
-            HubAction(result: result, download: model.downloads[result.id], start: download)
+            HubAction(
+                result: result, download: model.downloads[result.id],
+                downloaded: model.isDownloaded(result), start: download
+            )
         }
     }
 }

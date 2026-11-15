@@ -55,16 +55,19 @@ final class HubSearch {
     }
 }
 
-/// Download, or where the result's download stands.
+/// Download, or where the result's download stands. Whether it is on the
+/// server comes from the server's current list, not from the search: results
+/// are kept, and a checkpoint removed since must offer Download again.
 struct HubAction: View {
     let result: CatalogModel
     let download: ModelDownload?
+    let downloaded: Bool
     let start: (String) -> Void
 
     var body: some View {
         if let download {
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
-        } else if result.downloaded {
+        } else if downloaded {
             Pill(text: "Downloaded", color: Palette.success)
         } else {
             // The Hub marks a repository gated for everyone; whether this

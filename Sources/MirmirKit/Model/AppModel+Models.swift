@@ -65,6 +65,13 @@ extension AppModel {
         return downloads.values.filter { !listed.contains($0.repoID) }.sorted { $0.repoID < $1.repoID }
     }
 
+    /// Whether the server lists the search result's repository now. Kept
+    /// search results carry the state of their search; this follows
+    /// downloads and removals since.
+    public func isDownloaded(_ result: CatalogModel) -> Bool {
+        models.contains { $0.repoID == result.id }
+    }
+
     /// The running download of the model's repository.
     public func download(of local: LocalModel) -> ModelDownload? {
         guard !local.repoID.isEmpty else { return nil }

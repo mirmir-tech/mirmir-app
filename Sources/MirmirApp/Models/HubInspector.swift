@@ -12,7 +12,10 @@ struct HubInspector: View {
             VStack(alignment: .leading, spacing: 18) {
                 InspectorHeader(title: result.name, subtitle: result.id, features: result.features)
                 HStack {
-                    HubAction(result: result, download: model.downloads[result.id], start: download)
+                    HubAction(
+                        result: result, download: model.downloads[result.id],
+                        downloaded: model.isDownloaded(result), start: download
+                    )
                         .buttonStyle(.borderedProminent)
                     Spacer()
                     Link(destination: URL(string: "https://huggingface.co/\(result.id)")!) {

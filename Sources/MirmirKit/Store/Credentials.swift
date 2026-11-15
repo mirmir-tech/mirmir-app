@@ -83,14 +83,21 @@ public final class KeychainCredentials: CredentialStore {
         cache.withLock { cache in
             guard case .read(var keys) = load(&cache) else { return nil }
             if let key = keys[instance] { return key }
-            guard cache.looked.insert(instance).inserted,
-                  let data = try? items.read(instance.uuidString), let key = String(data: data, encoding: .utf8)
-            else { return nil }
-            keys[instance] = key
-            if (try? save(keys)) != nil {
-                cache.state = .read(keys)
-                items.delete(instance.uuidString)
+            guard cache.looked.insert(instance).inserted else { return nil }
+            let data: Data?
+            do {
+                data = try items.read(instance.uuidString)
+            } catch {
+                // Refused like the shared item: no more prompts this launch.
+                cache.state = .refused
+                return nil
             }
+            guard let data, let key = String(data: data, encoding: .utf8) else { return nil }
+            // Kept for this launch even when it cannot be saved; the old
+            // item goes only once the shared one holds the key.
+            keys[instance] = key
+            cache.state = .read(keys)
+            if (try? save(keys)) != nil { items.delete(instance.uuidString) }
             return key
         }
     }
