@@ -35,6 +35,7 @@ enum MainWindow {
 
     /// Activates the app and orders the main window in front of other apps.
     static func front() {
+        showInDock()
         NSApp.activate()
         guard let window = main else { return }
         if window.isMiniaturized { window.deminiaturize(nil) }
@@ -44,6 +45,26 @@ enum MainWindow {
 
     static var main: NSWindow? {
         NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(WindowID.main) == true }
+    }
+
+    /// While the main window is open the app is a regular app, like Docker
+    /// Desktop: in the Dock and the app switcher, so the window is easy to
+    /// get back to. Closing it returns the app to its menu bar item alone.
+    static func showInDock() {
+        if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+    }
+
+    /// Called when a window closes: once the main window is neither shown
+    /// nor in the Dock minimized, the app leaves the Dock.
+    static func leaveDockIfClosed(closing window: NSWindow) {
+        guard window === main else { return }
+        // The window is still visible while it closes.
+        DispatchQueue.main.async {
+            guard let main, main.isVisible || main.isMiniaturized else {
+                NSApp.setActivationPolicy(.accessory)
+                return
+            }
+        }
     }
 
     /// The `.window` style panel stays open over the main window otherwise.

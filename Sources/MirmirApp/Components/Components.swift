@@ -46,6 +46,10 @@ struct FeatureChips: View {
             .padding(.vertical, 2)
             .foregroundStyle(color)
             .background(Palette.soft(color), in: RoundedRectangle(cornerRadius: 5))
+            // A chip is never shortened to "to…": a table lays out a cell
+            // first at a narrower width than its column, and a chip
+            // truncated then stayed so.
+            .fixedSize()
     }
 }
 

@@ -23,11 +23,17 @@ struct ContextSection: View {
             Toggle("Automatic", isOn: automatic).toggleStyle(.switch).controlSize(.mini).font(.system(size: 11))
                 .disabled(busy)
         } content: {
-            HStack(alignment: .firstTextBaseline) {
-                Text(readout).font(.mono(13, weight: .semibold))
-                Spacer(minLength: 8)
-                if let resident = context.residentTokens {
-                    Text("loaded with \(Format.grouped(resident))").font(.system(size: 11)).foregroundStyle(.secondary)
+            // The resident capacity beside the choice, or under it when a
+            // long choice leaves no room.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    choiceText
+                    Spacer(minLength: 8)
+                    residentText
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    choiceText
+                    residentText
                 }
             }
             VStack(spacing: 2) {
@@ -47,6 +53,16 @@ struct ContextSection: View {
                 Divider().padding(.vertical, 2)
                 pendingChange
             }
+        }
+    }
+
+    private var choiceText: some View {
+        Text(readout).font(.mono(13, weight: .semibold)).lineLimit(1).fixedSize()
+    }
+
+    @ViewBuilder private var residentText: some View {
+        if let resident = context.residentTokens {
+            Text("loaded with \(Format.grouped(resident))").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 

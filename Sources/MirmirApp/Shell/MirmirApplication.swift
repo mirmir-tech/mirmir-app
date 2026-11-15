@@ -75,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Launched as an agent, the app is not activated by macOS, which then
         // takes the launch window off screen after a few seconds.
         DispatchQueue.main.async { MainWindow.front() }
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { note in
+            guard let window = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated { MainWindow.leaveDockIfClosed(closing: window) }
+        }
     }
 
     private static func otherInstances() -> [NSRunningApplication] {
@@ -119,9 +123,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.shutdown()
     }
 
-    /// A menu bar agent (`LSUIElement`): no Dock icon or menu bar of its own.
-    /// Closing the window leaves the menu bar item, which is the app; quit
-    /// from its panel.
+    /// A menu bar agent (`LSUIElement`), in the Dock only while its main
+    /// window is open (`MainWindow.showInDock`). Closing the window leaves
+    /// the menu bar item, which is the app; quit from its panel.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }

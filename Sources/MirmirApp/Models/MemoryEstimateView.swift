@@ -21,13 +21,11 @@ struct MemoryEstimateView: View {
                     .foregroundStyle(memory.fit == .doesNotFit ? Palette.danger : .primary)
             }
             StackedBar(segments: Part.allCases.map { .init(fraction: Double($0.bytes(memory)) / capacity, color: $0.color) }, height: 8)
-            HStack(spacing: 10) {
-                ForEach(Part.allCases, id: \.self) { part in
-                    HStack(spacing: 4) {
-                        Circle().fill(part.color).frame(width: 6, height: 6)
-                        Text("\(part.label) \(Format.gigabytes(part.bytes(memory))) GB")
-                    }
-                }
+            // One line when it fits, else one part per line; never a part
+            // broken across lines.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { legend }
+                VStack(alignment: .leading, spacing: 2) { legend }
             }
             .font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
             switch memory.fit {
@@ -41,6 +39,16 @@ struct MemoryEstimateView: View {
         }
         .opacity(pending ? 0.55 : 1)
         .animation(.easeOut(duration: 0.15), value: pending)
+    }
+
+    private var legend: some View {
+        ForEach(Part.allCases, id: \.self) { part in
+            HStack(spacing: 4) {
+                Circle().fill(part.color).frame(width: 6, height: 6)
+                Text("\(part.label) \(Format.gigabytes(part.bytes(memory))) GB")
+            }
+            .fixedSize()
+        }
     }
 
     private enum Part: CaseIterable {
