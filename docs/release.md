@@ -65,8 +65,9 @@ the developer account of team `5AH2Q9L8R2`:
 
 ## Notes
 
-The app needs macOS 27 or later on Apple silicon: the bundled MLX is built
-for the default deployment target, which keeps the NAX kernels on M5. Both
+The app needs macOS 26.2 or later on Apple silicon: the bundled MLX is pinned
+to that deployment target (`MLX_DEPLOYMENT_TARGET` in Workmir's
+`scripts/mlx/version.env`), the oldest that keeps the NAX kernels on M5. Both
 editions are sandboxed (`Resources/Mirmir.entitlements`); the bundled
 `mirmir serve` inherits the sandbox and keeps its state in the app's
 container, apart from the CLI's. Remote API keys are stored in the login

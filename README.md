@@ -79,14 +79,14 @@ protocol gaps that are still open.
 
 1. [Download MiRMiR for Mac](https://github.com/mirmir-tech/mirmir-app/releases/latest/download/Mirmir-macOS.dmg),
    open the disk image and drag Mirmir to Applications. It is signed and
-   notarized and needs macOS 27 or later on Apple silicon.
+   notarized and needs macOS 26.2 or later on Apple silicon.
 2. Start Mirmir. It includes the runtime (mirmir 0.6.1 and MLX) and runs its
    own server, separate from the CLI's. Its guide is at
    [docs.mirmir.tech](https://docs.mirmir.tech/getting-started/mac-app.html).
 
 ## Requirements for development
 
-- macOS 27 or later on Apple silicon, Xcode 27 or later (Swift 6)
+- macOS 26.2 or later on Apple silicon, Xcode 27 or later (Swift 6)
 - a Workmir checkout: every build embeds mirmir and MLX built from it
 - `protoc`, only to regenerate the gRPC client
 

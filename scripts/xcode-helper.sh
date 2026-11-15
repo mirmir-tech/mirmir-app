@@ -71,18 +71,8 @@ require git "install the Xcode command line tools"
 mlx_link="$workmir/.native/mlx"
 mlx_ready() {
     [[ -f "$mlx_link/include/mlx/version.h" && -f "$mlx_link/lib/libmlx.dylib" && -f "$mlx_link/lib/mlx.metallib" ]] || return 1
-    # The kernel mode is part of the pin: JIT installs end in -jit.
-    local installed
-    installed="$(cd "$mlx_link" && pwd -P)"
-    case "$installed" in
-        */mlx-"$MLX_VERSION"/install*) ;;
-        *) return 1 ;;
-    esac
-    if [[ "${MLX_METAL_JIT:-OFF}" == ON ]]; then
-        [[ "$installed" == *-jit ]]
-    else
-        [[ "$installed" != *-jit ]]
-    fi
+    # The pin covers the kernel mode and local patches, which name the install.
+    [[ "$(cd "$mlx_link" && pwd -P)" == "$("${clean_env[@]}" sh "$workmir/scripts/mlx/setup.sh" --print-prefix)" ]]
 }
 if ! mlx_ready; then
     require cmake "run: brew install cmake ninja"
