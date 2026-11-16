@@ -80,7 +80,7 @@ protocol gaps that are still open.
 1. [Download MiRMiR for Mac](https://github.com/mirmir-tech/mirmir-app/releases/latest/download/Mirmir-macOS.dmg),
    open the disk image and drag Mirmir to Applications. It is signed and
    notarized and needs macOS 26.2 or later on Apple silicon.
-2. Start Mirmir. It includes the runtime (mirmir 0.6.1 and MLX) and runs its
+2. Start Mirmir. It includes the runtime (mirmir 0.6.2 and MLX) and runs its
    own server, separate from the CLI's. Its guide is at
    [docs.mirmir.tech](https://docs.mirmir.tech/getting-started/mac-app.html).
 
