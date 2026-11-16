@@ -3,7 +3,7 @@
 Mirmir for Mac follows mirmir's version and contains it: the release embeds
 mirmir and MLX built from the surrounding Workmir checkout.
 
-1. Check out the release commit of every Workmir child (`mirmir` 0.6.1 and
+1. Check out the release commit of every Workmir child (`mirmir` 0.6.2 and
    the MLX pinned in `scripts/mlx/version.env`); the build installs MLX if
    `.native/mlx` does not point at that release.
 2. On a Mac with the Developer ID Application certificate of team
@@ -35,8 +35,8 @@ mirmir and MLX built from the surrounding Workmir checkout.
    `curl http://127.0.0.1:18080/v1/models` answers, grant a Hugging Face cache
    in Settings → Model folders and check that its models are listed, then add
    a remote server (Instances → Add Server) and open Remote Access.
-4. Create the GitHub release `v0.6.1` in `mirmir-tech/mirmir-app` and attach
-   `build/release/Mirmir-0.6.1.dmg` and `build/release/Mirmir-macOS.dmg`. The website's
+4. Create the GitHub release `v0.6.2` in `mirmir-tech/mirmir-app` and attach
+   `build/release/Mirmir-0.6.2.dmg` and `build/release/Mirmir-macOS.dmg`. The website's
    download button points to
    `https://github.com/mirmir-tech/mirmir-app/releases/latest/download/Mirmir-macOS.dmg`.
 
@@ -65,8 +65,9 @@ the developer account of team `5AH2Q9L8R2`:
 
 ## Notes
 
-The app needs macOS 27 or later on Apple silicon: the bundled MLX is built
-for the default deployment target, which keeps the NAX kernels on M5. Both
+The app needs macOS 26.2 or later on Apple silicon: the bundled MLX is pinned
+to that deployment target (`MLX_DEPLOYMENT_TARGET` in Workmir's
+`scripts/mlx/version.env`), the oldest that keeps the NAX kernels on M5. Both
 editions are sandboxed (`Resources/Mirmir.entitlements`); the bundled
 `mirmir serve` inherits the sandbox and keeps its state in the app's
 container, apart from the CLI's. Remote API keys are stored in the login

@@ -189,6 +189,6 @@ and a `mirmir` configuration key listing model folders.
 
 ## Build
 
-SwiftPM for `MirmirKit`/`MirmirRPC`, `Mirmir.xcodeproj` for the app bundle. The kit needs macOS 15+ (grpc-swift 2); the app needs macOS 27 on Apple silicon, the target of the MLX it bundles. `swift test` for the kit;
+SwiftPM for `MirmirKit`/`MirmirRPC`, `Mirmir.xcodeproj` for the app bundle. The kit needs macOS 15+ (grpc-swift 2); the app needs macOS 26.2 on Apple silicon, the oldest target that keeps MLX NAX kernels. `swift test` for the kit;
 `scripts/bundle.sh` builds `Mirmir.app` with `xcodebuild`, embedding, in Debug or when given,
 the `mirmir` helper binary.

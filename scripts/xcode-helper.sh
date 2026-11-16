@@ -19,7 +19,10 @@
 # nothing, and the app falls back to mirmir on PATH.
 #
 #   MIRMIR_HELPER=skip       do not build or embed the runtime (no local server)
-#   MIRMIR_CARGO_PROFILE=dev build an unoptimized server (default: release)
+#   MIRMIR_CARGO_PROFILE=dev build an unoptimized server (default: app, release
+#                          without symbols; `release` keeps them; `app-lto`,
+#                          set by scripts/release.sh, adds whole-program
+#                          optimization: smaller, three times slower to build)
 set -euo pipefail
 
 app_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,8 +38,11 @@ if [[ ! -f "$crate/Cargo.toml" || ! -f "$workmir/.cargo/config.toml" ]]; then
     exit 0
 fi
 
-profile="${MIRMIR_CARGO_PROFILE:-release}"
+# `app` is release without symbols (mirmir's Cargo.toml).
+profile="${MIRMIR_CARGO_PROFILE:-app}"
 case "$profile" in
+    app) out_dir=app ;;
+    app-lto) out_dir=app-lto ;;
     release) out_dir=release ;;
     dev | debug) profile=dev; out_dir=debug ;;
     *) echo "error: unsupported MIRMIR_CARGO_PROFILE=$profile" >&2; exit 1 ;;
@@ -65,10 +71,8 @@ require git "install the Xcode command line tools"
 mlx_link="$workmir/.native/mlx"
 mlx_ready() {
     [[ -f "$mlx_link/include/mlx/version.h" && -f "$mlx_link/lib/libmlx.dylib" && -f "$mlx_link/lib/mlx.metallib" ]] || return 1
-    case "$(cd "$mlx_link" && pwd -P)" in
-        */mlx-"$MLX_VERSION"/install*) return 0 ;;
-        *) return 1 ;;
-    esac
+    # The pin covers the kernel mode and local patches, which name the install.
+    [[ "$(cd "$mlx_link" && pwd -P)" == "$("${clean_env[@]}" sh "$workmir/scripts/mlx/setup.sh" --print-prefix)" ]]
 }
 if ! mlx_ready; then
     require cmake "run: brew install cmake ninja"

@@ -37,7 +37,7 @@ extension AppModel {
         currentInstanceID = InstanceRecord.thisMacID
         summaries = [
             PreviewData.studio.id: InstanceSummary(
-                status: .online(ServerHealth(protocolVersion: "2", serverVersion: "0.6.1")),
+                status: .online(ServerHealth(protocolVersion: "2", serverVersion: "0.6.2")),
                 telemetry: PreviewData.telemetry(at: now, decode: 61.2, active: 1),
                 loadedModels: ["mlx-community/Qwen3-4B-4bit"]
             ),

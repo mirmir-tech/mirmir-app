@@ -4,10 +4,12 @@
 #   scripts/release.sh [--skip-notarize]
 #   scripts/release.sh --app-store [--upload]
 #
-#   MIRMIR_APP_VERSION     marketing version (default 0.6.1)
+#   MIRMIR_APP_VERSION     marketing version (default 0.6.2)
 #   MIRMIR_SIGN_IDENTITY   code signing identity (default "Developer ID Application")
 #   MIRMIR_TEAM_ID         team of that identity (default 5AH2Q9L8R2)
 #   MIRMIR_NOTARY_PROFILE  notarytool keychain profile (default mirmir-notary)
+#   MIRMIR_CARGO_PROFILE   cargo profile of the bundled server (default app-lto,
+#                          see scripts/xcode-helper.sh)
 #
 # Create the notarytool profile once:
 #   xcrun notarytool store-credentials mirmir-notary \
@@ -55,11 +57,12 @@ for argument in "$@"; do
     esac
 done
 
-version="${MIRMIR_APP_VERSION:-0.6.1}"
+version="${MIRMIR_APP_VERSION:-0.6.2}"
 build_number="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 identity="${MIRMIR_SIGN_IDENTITY:-Developer ID Application}"
 team="${MIRMIR_TEAM_ID:-5AH2Q9L8R2}"
 profile="${MIRMIR_NOTARY_PROFILE:-mirmir-notary}"
+export MIRMIR_CARGO_PROFILE="${MIRMIR_CARGO_PROFILE:-app-lto}"
 volume="Mirmir"
 out="build/release"
 work="$out/work"

@@ -125,7 +125,7 @@ public final class RuntimeConnection: Sendable {
             grpc: grpc,
             connections: Task {},
             address: "preview",
-            health: ServerHealth(protocolVersion: "2", serverVersion: "0.6.1"),
+            health: ServerHealth(protocolVersion: "2", serverVersion: "0.6.2"),
             deadlines: .standard
         )
     }
