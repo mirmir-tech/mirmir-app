@@ -23,11 +23,12 @@
 #                          without symbols; `release` keeps them; `app-lto`,
 #                          set by scripts/release.sh, adds whole-program
 #                          optimization: smaller, three times slower to build)
-#   MIRMIR_APP_STORE=1     build mirmir without private GPU sampling (set by
-#                          scripts/release/app-store.sh): libmir reads GPU
-#                          temperature and power through private macOS
-#                          interfaces, which App Review rejects; utilization
-#                          still comes from public IOKit properties
+#
+# Every edition, the Mac App Store's and the disk image's, embeds the same
+# mirmir, built without its default `gpu-telemetry` feature: that samples GPU
+# temperature and power through private macOS interfaces, which App Review
+# rejects and the app does not show. GPU utilization comes from public IOKit
+# properties either way.
 set -euo pipefail
 
 app_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -87,15 +88,8 @@ if ! mlx_ready; then
     mlx_ready || { echo "error: scripts/mlx/setup.sh did not leave MLX $MLX_VERSION at $mlx_link" >&2; exit 1; }
 fi
 
-features=()
-edition="with full GPU telemetry"
-if [[ "${MIRMIR_APP_STORE:-}" == 1 ]]; then
-    features=(--no-default-features)
-    edition="for the Mac App Store, GPU utilization only"
-fi
-echo "building mirmir ($profile, $edition) in $crate against MLX $MLX_VERSION"
-# The empty-array form keeps bash 3.2 (macOS /bin/bash) happy under set -u.
-(cd "$crate" && "${clean_env[@]}" cargo build --profile "$profile" --bin mirmir ${features[@]+"${features[@]}"})
+echo "building mirmir ($profile, without private GPU telemetry) in $crate against MLX $MLX_VERSION"
+(cd "$crate" && "${clean_env[@]}" cargo build --profile "$profile" --bin mirmir --no-default-features)
 
 binary="$crate/target/$out_dir/mirmir"
 mlx_lib="$(cd "$mlx_link" && pwd -P)/lib"

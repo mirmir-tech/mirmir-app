@@ -105,6 +105,7 @@ grep -q "flags=.*runtime" <<<"$details" || { echo "error: hardened runtime is of
 "$root/scripts/release/check-sandbox.sh" "$app"
 
 step "Checking the bundled runtime"
+"$root/scripts/release/check-private-api.sh" "$app"
 # The helper inherits the app's sandbox, so it runs only as the app's child
 # (alone it traps); check the binary instead of running it.
 lipo -archs "$app/Contents/Helpers/mirmir" | grep -qx arm64 || { echo "error: the bundled mirmir is not arm64" >&2; exit 1; }
