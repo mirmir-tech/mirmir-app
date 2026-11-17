@@ -23,10 +23,11 @@
 #                          without symbols; `release` keeps them; `app-lto`,
 #                          set by scripts/release.sh, adds whole-program
 #                          optimization: smaller, three times slower to build)
-#   MIRMIR_APP_STORE=1     build mirmir without GPU telemetry (set by
-#                          scripts/release/app-store.sh): libmir samples GPU
-#                          utilization, temperature and power through private
-#                          macOS interfaces, which App Review rejects
+#   MIRMIR_APP_STORE=1     build mirmir without private GPU sampling (set by
+#                          scripts/release/app-store.sh): libmir reads GPU
+#                          temperature and power through private macOS
+#                          interfaces, which App Review rejects; utilization
+#                          still comes from public IOKit properties
 set -euo pipefail
 
 app_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -87,10 +88,10 @@ if ! mlx_ready; then
 fi
 
 features=()
-edition="with GPU telemetry"
+edition="with full GPU telemetry"
 if [[ "${MIRMIR_APP_STORE:-}" == 1 ]]; then
     features=(--no-default-features)
-    edition="for the Mac App Store, without GPU telemetry"
+    edition="for the Mac App Store, GPU utilization only"
 fi
 echo "building mirmir ($profile, $edition) in $crate against MLX $MLX_VERSION"
 # The empty-array form keeps bash 3.2 (macOS /bin/bash) happy under set -u.
