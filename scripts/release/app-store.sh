@@ -64,7 +64,7 @@ xcodebuild -project Mirmir.xcodeproj -scheme Mirmir -configuration Release \
     -archivePath "$archive" \
     MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build_number" \
     CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$signer" DEVELOPMENT_TEAM="$team" \
-    MIRMIR_PROVISIONING_PROFILE="$profile_uuid" \
+    MIRMIR_PROVISIONING_PROFILE="$profile_uuid" MIRMIR_APP_STORE=1 \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     archive
 app="$archive/Products/Applications/Mirmir.app"
@@ -84,6 +84,17 @@ grep -qF "\"com.apple.developer.team-identifier\":\"$team\"" <<<"$signed" \
 # (alone it traps); check the binary instead of running it.
 lipo -archs "$app/Contents/Helpers/mirmir" | grep -qx arm64 || { echo "error: the bundled mirmir is not arm64" >&2; exit 1; }
 lipo -archs "$app/Contents/MacOS/Mirmir" | grep -qx arm64 || fail "the app is not arm64 only"
+# App Review rejects private macOS interfaces. The ones mirmir could pull in
+# are libmir's GPU telemetry (IOReport, IOHID events), left out above through
+# MIRMIR_APP_STORE.
+private_api='^_(IOReport|IOHIDEventSystemClient|IOHIDServiceClientCopyEvent|IOHIDEventGet)'
+while IFS= read -r -d '' file; do
+    file -b "$file" | grep -q Mach-O || continue
+    found="$(nm -u "$file" 2>/dev/null | grep -E "$private_api" || true)"
+    [[ -z "$found" ]] || fail "${file#"$app/"} uses private macOS interfaces:
+$found"
+    ! otool -L "$file" | grep -q libIOReport || fail "${file#"$app/"} links libIOReport"
+done < <(find "$app/Contents" -type f -print0)
 
 step "Packaging"
 pkg="$out/Mirmir-$version.pkg"

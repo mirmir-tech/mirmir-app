@@ -8,11 +8,14 @@ HOW TO TEST (about 10 minutes, mostly the download)
 
 WHAT THE APP DOES IN THE BACKGROUND (all of it documented in the app)
 - It bundles the MiRMiR runtime as a helper (Contents/Helpers/mirmir) and starts it as a child process. The helper inherits the app's sandbox and keeps its data in the app's container. Quitting the app stops it.
-- The helper serves an OpenAI-compatible HTTP API on 127.0.0.1:18080 so that the user's own tools can use the loaded model. The address is shown in Settings > Server.
-- Remote Access (Instances > This Mac > Remote Access) is off by default. When the user turns it on, the helper listens for TLS connections from other machines and accepts only API keys the user creates. This is why the app has the network server entitlement.
 - Instances > Add Server connects to MiRMiR servers the user runs on other machines, over TLS with an API key kept in the Keychain. Testing it needs a second machine running MiRMiR; it is optional for review.
 - Model folders (Settings > Model folders) are user-selected folders kept as security-scoped bookmarks.
 - Network use: Hugging Face (model search and downloads requested by the user) and the servers the user adds. No analytics or tracking.
+
+WHY THE APP HAS com.apple.security.network.server
+The app accepts incoming connections through its bundled helper. The helper is signed with com.apple.security.inherit, so its network access comes from the app's entitlements, which is why the server entitlement sits on the app. The helper listens:
+- Always, on 127.0.0.1:18080: an OpenAI-compatible HTTP API, so the user's own editors and scripts can use the loaded model. To verify, run in Terminal while the app is open: curl http://127.0.0.1:18080/health. The address is shown in Configuration (Cmd-7) > HTTP API.
+- Only when the user turns on Remote Access (Instances > This Mac > Remote Access; off by default): a TLS listener that other Macs reach with API keys the user creates.
 
 Downloaded files are model weights (data). The app does not download or run executable code. Metal kernels are compiled at run time from Metal source that ships inside the app.
 
