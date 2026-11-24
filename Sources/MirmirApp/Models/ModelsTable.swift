@@ -7,6 +7,7 @@ struct ModelsTable: View {
     @Environment(AppModel.self) private var model
     let rows: [ModelRow]
     @Binding var selection: String?
+    let choices: VariantChoices
     let download: (String) -> Void
 
     var body: some View {
@@ -61,9 +62,12 @@ struct ModelsTable: View {
         case .download(let download):
             Text(download.totalBytes.map(Format.bytes) ?? "—").font(.mono(12)).foregroundStyle(.secondary)
         case .hub(let result):
-            // What it needs here, red when it does not fit.
-            Text(result.estimatedRequiredBytes.map(Format.bytes) ?? "—").font(.mono(12))
-                .foregroundStyle(result.memoryFit == .doesNotFit ? Palette.danger : .secondary)
+            // What the chosen quantization needs here, red when it does not fit.
+            let variant = choices.variant(of: result)
+            let required = variant.map(\.requiredBytes) ?? result.estimatedRequiredBytes
+            let fit = variant?.memoryFit ?? result.memoryFit
+            Text(required.map(Format.bytes) ?? "—").font(.mono(12))
+                .foregroundStyle(fit == .doesNotFit ? Palette.danger : .secondary)
                 .help("Memory it needs on this server")
         }
     }
@@ -77,9 +81,9 @@ struct ModelsTable: View {
             )
         case .download(let download):
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
+        case .hub(let result) where result.variants.count > 1:
+            HubVariantMenu(result: result, choices: choices, model: model, start: download)
         case .hub(let result):
-            // The table downloads a GGUF repository's default variant; the
-            // inspector chooses another.
             let pullID = result.pullID(for: result.defaultChoice)
             HubAction(
                 result: result, pullID: pullID, download: model.downloads[pullID],

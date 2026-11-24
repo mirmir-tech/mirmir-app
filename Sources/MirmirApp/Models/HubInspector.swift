@@ -5,11 +5,12 @@ import SwiftUI
 struct HubInspector: View {
     @Environment(AppModel.self) private var model
     let result: CatalogModel
+    let choices: VariantChoices
     let download: (String) -> Void
     @State private var variants = HubVariants()
 
     var body: some View {
-        let variant = variants.variant(of: result)
+        let variant = choices.variant(of: result, among: variants.choices)
         let pullID = result.pullID(for: variant)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -17,7 +18,8 @@ struct HubInspector: View {
                 HStack {
                     HubAction(
                         result: result, pullID: pullID, download: model.downloads[pullID],
-                        downloaded: model.isDownloaded(result, variant: variant), start: download
+                        downloaded: model.isDownloaded(result, variant: variant), start: download,
+                        label: variant.map { "Download \($0.name)" } ?? "Download"
                     )
                         .buttonStyle(.borderedProminent)
                     Spacer()
@@ -27,7 +29,7 @@ struct HubInspector: View {
                     .font(.system(size: 12))
                 }
                 if !result.variants.isEmpty {
-                    QuantizationSection(variants: variants, result: result)
+                    QuantizationSection(variants: variants, choices: choices, result: result)
                 }
                 InspectorSection("On this server") {
                     if result.variants.isEmpty {

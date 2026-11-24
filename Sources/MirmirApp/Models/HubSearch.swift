@@ -65,6 +65,7 @@ struct HubAction: View {
     let download: ModelDownload?
     let downloaded: Bool
     let start: (String) -> Void
+    var label = "Download"
 
     var body: some View {
         if let download {
@@ -74,7 +75,7 @@ struct HubAction: View {
         } else {
             // The Hub marks a repository gated for everyone; whether this
             // server's token was granted access shows only when it downloads.
-            Button("Download") { start(pullID) }
+            Button(label) { start(pullID) }
                 .controlSize(.small)
                 .help(result.gated ? "Gated repository: accept its terms on Hugging Face and add your token in Configuration." : "Download \(pullID)")
         }
@@ -82,12 +83,56 @@ struct HubAction: View {
 }
 
 extension CatalogModel {
-    /// The default quantization and how many there are, for a GGUF row.
+    /// How many quantizations a GGUF row offers.
     var quantizations: String {
-        guard let chosen = defaultChoice else { return "" }
-        return variants.count > 1 ? "\(chosen.name) of \(variants.count) quantizations" : chosen.name
+        variants.count > 1 ? "\(variants.count) quantizations" : (defaultChoice?.name ?? "")
     }
 
     var name: String { id.split(separator: "/").last.map(String.init) ?? id }
     var owner: String { id.contains("/") ? String(id.split(separator: "/")[0]) : "" }
+}
+
+/// A GGUF repository's Download in the table: the button downloads the
+/// chosen quantization, its menu lists every one with its size and fit,
+/// and picking one chooses it for the inspector too.
+struct HubVariantMenu: View {
+    let result: CatalogModel
+    let choices: VariantChoices
+    let model: AppModel
+    let start: (String) -> Void
+
+    var body: some View {
+        let variant = choices.variant(of: result)
+        let pullID = result.pullID(for: variant)
+        if let download = model.downloads[pullID] {
+            ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
+        } else {
+            Menu {
+                ForEach(result.variants) { option in
+                    Button {
+                        choices.choose(option.name, for: result)
+                    } label: {
+                        if option.name == variant?.name {
+                            Label(menuLabel(option), systemImage: "checkmark")
+                        } else {
+                            Text(menuLabel(option))
+                        }
+                    }
+                }
+            } label: {
+                Text(model.isDownloaded(result, variant: variant) ? "\(variant?.name ?? "") ✓" : "Download \(variant?.name ?? "")")
+            } primaryAction: {
+                if !model.isDownloaded(result, variant: variant) { start(pullID) }
+            }
+            .menuStyle(.button)
+            .controlSize(.small)
+            .fixedSize()
+            .help("Download \(pullID); the arrow chooses another quantization")
+        }
+    }
+
+    private func menuLabel(_ variant: CatalogVariant) -> String {
+        let fit = variant.memoryFit == .doesNotFit ? " · does not fit" : ""
+        return variant.label(defaultVariant: result.defaultVariant) + fit
+    }
 }
