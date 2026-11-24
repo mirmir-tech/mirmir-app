@@ -382,10 +382,15 @@ public nonisolated struct Mirmir_V1_LocalModelInfo: @unchecked Sendable {
     set {_uniqueStorage()._container = newValue}
   }
 
+  /// Absent when nothing names the weights' encoding.
   public var encoding: String {
-    get {_storage._encoding}
+    get {_storage._encoding ?? String()}
     set {_uniqueStorage()._encoding = newValue}
   }
+  /// Returns true if `encoding` has been explicitly set.
+  public var hasEncoding: Bool {_storage._encoding != nil}
+  /// Clears the value of `encoding`. Subsequent reads from it will return its default value.
+  public mutating func clearEncoding() {_uniqueStorage()._encoding = nil}
 
   public var metalCompatibility: String {
     get {_storage._metalCompatibility}
@@ -1067,10 +1072,15 @@ public nonisolated struct Mirmir_V1_CatalogModel: @unchecked Sendable {
     set {_uniqueStorage()._container = newValue}
   }
 
+  /// Absent when nothing names the weights' encoding.
   public var encoding: String {
-    get {_storage._encoding}
+    get {_storage._encoding ?? String()}
     set {_uniqueStorage()._encoding = newValue}
   }
+  /// Returns true if `encoding` has been explicitly set.
+  public var hasEncoding: Bool {_storage._encoding != nil}
+  /// Clears the value of `encoding`. Subsequent reads from it will return its default value.
+  public mutating func clearEncoding() {_uniqueStorage()._encoding = nil}
 
   public var metalCompatibility: String {
     get {_storage._metalCompatibility}
@@ -3103,7 +3113,7 @@ nonisolated extension Mirmir_V1_LocalModelInfo: SwiftProtobuf.Message, SwiftProt
     var _vision: Bool = false
     var _ecosystem: String = String()
     var _container: String = String()
-    var _encoding: String = String()
+    var _encoding: String? = nil
     var _metalCompatibility: String = String()
     var _cudaCompatibility: String = String()
 
@@ -3257,9 +3267,9 @@ nonisolated extension Mirmir_V1_LocalModelInfo: SwiftProtobuf.Message, SwiftProt
       if !_storage._container.isEmpty {
         try visitor.visitSingularStringField(value: _storage._container, fieldNumber: 21)
       }
-      if !_storage._encoding.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._encoding, fieldNumber: 22)
-      }
+      try { if let v = _storage._encoding {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 22)
+      } }()
       if !_storage._metalCompatibility.isEmpty {
         try visitor.visitSingularStringField(value: _storage._metalCompatibility, fieldNumber: 23)
       }
@@ -4235,7 +4245,7 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
     var _vision: Bool = false
     var _ecosystem: String = String()
     var _container: String = String()
-    var _encoding: String = String()
+    var _encoding: String? = nil
     var _metalCompatibility: String = String()
     var _cudaCompatibility: String = String()
     var _preflightBytes: UInt64? = nil
@@ -4396,9 +4406,9 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
       if !_storage._container.isEmpty {
         try visitor.visitSingularStringField(value: _storage._container, fieldNumber: 20)
       }
-      if !_storage._encoding.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._encoding, fieldNumber: 21)
-      }
+      try { if let v = _storage._encoding {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 21)
+      } }()
       if !_storage._metalCompatibility.isEmpty {
         try visitor.visitSingularStringField(value: _storage._metalCompatibility, fieldNumber: 22)
       }

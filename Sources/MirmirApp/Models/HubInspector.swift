@@ -39,7 +39,7 @@ struct HubInspector: View {
                 }
                 InspectorSection("Model") {
                     InspectorRow("Class", value: result.modelClass)
-                    InspectorRow("Encoding", value: result.encoding)
+                    InspectorRow("Encoding", value: result.encoding ?? "—")
                     InspectorRow("Downloads", value: Format.grouped(result.downloads))
                     InspectorRow("Likes", value: Format.grouped(result.likes))
                 }

@@ -13,7 +13,8 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
     public let reason: String
     public let downloaded: Bool
     public let features: ModelFeatures
-    public let encoding: String
+    /// Absent when nothing names the weights' encoding.
+    public let encoding: String?
     /// A GGUF repository's quantizations, fewest bits per weight first;
     /// empty for other repositories.
     public internal(set) var variants: [CatalogVariant] = []

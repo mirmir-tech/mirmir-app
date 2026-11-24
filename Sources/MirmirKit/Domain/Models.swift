@@ -56,7 +56,8 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     public let state: LocalModelState
     public let loadability: Loadability
     public let modelClass: String
-    public let encoding: String
+    /// Absent when nothing names the weights' encoding.
+    public let encoding: String?
     public let container: String
     public let sizeBytes: UInt64
     public let features: ModelFeatures
@@ -81,7 +82,7 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     static func unlisted(selector: String) -> LocalModel {
         LocalModel(
             selector: selector, repoID: "", commit: "", path: selector.hasPrefix("/") ? selector : "",
-            state: .loaded, loadability: .loadable, modelClass: "", encoding: "", container: "",
+            state: .loaded, loadability: .loadable, modelClass: "", encoding: nil, container: "",
             sizeBytes: 0, features: [], imageInput: false, managed: false, recentRank: nil
         )
     }
