@@ -44,7 +44,7 @@ struct ModelsTable: View {
         case .download(let download):
             (download.displayName, download.repoID)
         case .hub(let result):
-            (result.name, (["Hugging Face", result.owner, result.modelClass]).filter { !$0.isEmpty }.joined(separator: " · "))
+            (result.name, (["Hugging Face", result.owner, result.modelClass, result.quantizations]).filter { !$0.isEmpty }.joined(separator: " · "))
         }
         return VStack(alignment: .leading, spacing: 1) {
             Text(title).fontWeight(.medium)
@@ -78,8 +78,11 @@ struct ModelsTable: View {
         case .download(let download):
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
         case .hub(let result):
+            // The table downloads a GGUF repository's default variant; the
+            // inspector chooses another.
+            let pullID = result.pullID(for: result.defaultChoice)
             HubAction(
-                result: result, download: model.downloads[result.id],
+                result: result, pullID: pullID, download: model.downloads[pullID],
                 downloaded: model.isDownloaded(result), start: download
             )
         }

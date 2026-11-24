@@ -60,6 +60,8 @@ final class HubSearch {
 /// are kept, and a checkpoint removed since must offer Download again.
 struct HubAction: View {
     let result: CatalogModel
+    /// What the button downloads: the repository, or one GGUF variant.
+    let pullID: String
     let download: ModelDownload?
     let downloaded: Bool
     let start: (String) -> Void
@@ -72,14 +74,20 @@ struct HubAction: View {
         } else {
             // The Hub marks a repository gated for everyone; whether this
             // server's token was granted access shows only when it downloads.
-            Button("Download") { start(result.id) }
+            Button("Download") { start(pullID) }
                 .controlSize(.small)
-                .help(result.gated ? "Gated repository: accept its terms on Hugging Face and add your token in Configuration." : "Download \(result.id)")
+                .help(result.gated ? "Gated repository: accept its terms on Hugging Face and add your token in Configuration." : "Download \(pullID)")
         }
     }
 }
 
 extension CatalogModel {
+    /// The default quantization and how many there are, for a GGUF row.
+    var quantizations: String {
+        guard let chosen = defaultChoice else { return "" }
+        return variants.count > 1 ? "\(chosen.name) of \(variants.count) quantizations" : chosen.name
+    }
+
     var name: String { id.split(separator: "/").last.map(String.init) ?? id }
     var owner: String { id.contains("/") ? String(id.split(separator: "/")[0]) : "" }
 }

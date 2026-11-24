@@ -71,7 +71,19 @@ extension AppModel {
     /// missing checkpoint is listed but not downloaded, so it can be
     /// downloaded again; an unsupported complete one is downloaded.
     public func isDownloaded(_ result: CatalogModel) -> Bool {
-        models.contains { $0.repoID == result.id && $0.state.isOnDisk }
+        isDownloaded(result, variant: result.defaultChoice)
+    }
+
+    /// Whether the server lists `variant` of `result` (or the repository,
+    /// without one) as on disk.
+    public func isDownloaded(_ result: CatalogModel, variant: CatalogVariant?) -> Bool {
+        let id = result.pullID(for: variant)
+        return models.contains { $0.repoID == id && $0.state.isOnDisk }
+    }
+
+    public func variants(of result: CatalogModel) async throws(ConnectionError) -> ModelVariants {
+        guard let connection else { throw .noServer(socket: currentInstance.name) }
+        return try await connection.variants(repoID: result.id)
     }
 
     /// The running download of the model's repository.

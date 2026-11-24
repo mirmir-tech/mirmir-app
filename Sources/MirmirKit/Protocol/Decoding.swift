@@ -191,7 +191,9 @@ extension CatalogModel {
             estimatedRequiredBytes: wire.hasEstimatedRequiredBytes ? wire.estimatedRequiredBytes : nil,
             reason: wire.reason, downloaded: wire.downloaded,
             features: ModelFeatures(toolUse: wire.toolUse, thinking: wire.thinking, vision: wire.vision),
-            encoding: wire.encoding
+            encoding: wire.encoding,
+            variants: wire.variants.map(CatalogVariant.init),
+            defaultVariant: wire.hasDefaultVariant ? wire.defaultVariant : nil
         )
     }
 }

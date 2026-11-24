@@ -70,7 +70,9 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     /// for a path, the model directory (or its Hugging Face repository).
     public var displayName: String {
         if repoID.isEmpty { return Conversation.modelName(selector) }
-        return repoID.split(separator: "/").last.map(String.init) ?? repoID
+        let name = repoID.split(separator: "/").last.map(String.init) ?? repoID
+        // A GGUF variant, `repository:VARIANT`, reads "repository · VARIANT".
+        return name.replacingOccurrences(of: ":", with: " · ")
     }
 
     /// A model the server serves but does not list locally, such as a

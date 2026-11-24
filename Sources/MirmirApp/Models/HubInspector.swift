@@ -6,15 +6,18 @@ struct HubInspector: View {
     @Environment(AppModel.self) private var model
     let result: CatalogModel
     let download: (String) -> Void
+    @State private var variants = HubVariants()
 
     var body: some View {
+        let variant = variants.variant(of: result)
+        let pullID = result.pullID(for: variant)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 InspectorHeader(title: result.name, subtitle: result.id, features: result.features)
                 HStack {
                     HubAction(
-                        result: result, download: model.downloads[result.id],
-                        downloaded: model.isDownloaded(result), start: download
+                        result: result, pullID: pullID, download: model.downloads[pullID],
+                        downloaded: model.isDownloaded(result, variant: variant), start: download
                     )
                         .buttonStyle(.borderedProminent)
                     Spacer()
@@ -23,8 +26,13 @@ struct HubInspector: View {
                     }
                     .font(.system(size: 12))
                 }
+                if !result.variants.isEmpty {
+                    QuantizationSection(variants: variants, result: result)
+                }
                 InspectorSection("On this server") {
-                    InspectorRow("Memory", value: memory, color: result.memoryFit == .doesNotFit ? Palette.danger : nil)
+                    if result.variants.isEmpty {
+                        InspectorRow("Memory", value: memory, color: result.memoryFit == .doesNotFit ? Palette.danger : nil)
+                    }
                     InspectorRow("Compatibility", value: result.compatibility)
                     if !result.reason.isEmpty { InspectorNote(result.reason) }
                     if result.gated { InspectorNote("Gated: accept its terms on Hugging Face and add your token in Configuration.") }
@@ -38,6 +46,7 @@ struct HubInspector: View {
             }
             .padding(16)
         }
+        .task(id: result.id) { await variants.load(result, on: model) }
     }
 
     private var memory: String {
