@@ -95,9 +95,15 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     public var shortCommit: String { String(commit.prefix(7)) }
 }
 
+/// Whether a model fits this server's memory budget, as the server judges it.
 public enum MemoryFit: Hashable, Sendable {
+    /// It fits with room to spare.
     case fits
+    /// It fits, with little of the budget left over: other work on the
+    /// server, or a longer context, may not fit beside it.
+    case tight
     case doesNotFit
+    /// The server could not tell, or sent a judgement this client predates.
     case unknown
 }
 

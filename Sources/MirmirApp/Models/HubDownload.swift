@@ -56,8 +56,7 @@ struct HubDownload: View {
     }
 
     private func menuLabel(_ variant: CatalogVariant) -> String {
-        let fit = variant.memoryFit == .doesNotFit ? " · does not fit" : ""
-        return variant.label(defaultVariant: result.defaultVariant) + fit
+        variant.label(defaultVariant: result.defaultVariant) + variant.memoryFit.marker
     }
 }
 

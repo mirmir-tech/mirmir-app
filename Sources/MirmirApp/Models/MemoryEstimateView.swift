@@ -18,7 +18,7 @@ struct MemoryEstimateView: View {
                 Text("Memory").font(.system(size: 12))
                 Spacer()
                 Text(required).font(.mono(12, weight: .semibold))
-                    .foregroundStyle(memory.fit == .doesNotFit ? Palette.danger : .primary)
+                    .foregroundStyle(memory.fit.color ?? .primary)
             }
             StackedBar(segments: Part.allCases.map { .init(fraction: Double($0.bytes(memory)) / capacity, color: $0.color) }, height: 8)
             // One line when it fits, else one part per line; never a part
@@ -31,6 +31,8 @@ struct MemoryEstimateView: View {
             switch memory.fit {
             case .fits:
                 if let headroom { InspectorNote(headroom) }
+            case .tight:
+                InspectorNote(["Fits, with little of the memory budget to spare.", headroom].compactMap(\.self).joined(separator: " "), color: Palette.warning)
             case .doesNotFit:
                 InspectorNote(["Does not fit the current memory budget.", headroom].compactMap(\.self).joined(separator: " "), color: Palette.danger)
             case .unknown:

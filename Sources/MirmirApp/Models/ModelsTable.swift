@@ -64,14 +64,15 @@ struct ModelsTable: View {
             Text(download.totalBytes.map(Format.bytes) ?? "—").font(.mono(12)).foregroundStyle(.secondary)
         case .hub(let found):
             // What the chosen quantization downloads, as the local row will
-            // show it; red when what it needs here does not fit. A GGUF row
+            // show it; tinted when what it needs here fits tightly or not at
+            // all. A GGUF row
             // lists its files once shown, for their exact sizes.
             let result = listings.resolve(found)
             let variant = choices.variant(of: result)
             let size = variant?.size ?? result.estimatedWeightBytes.map(VariantSize.estimated) ?? .unknown
             let fit = variant?.memoryFit ?? result.memoryFit
             Text(size.label).font(.mono(12))
-                .foregroundStyle(fit == .doesNotFit ? Palette.danger : .secondary)
+                .foregroundStyle(fit.color ?? .secondary)
                 .help(sizeHelp(size, required: variant?.requiredBytes ?? result.estimatedRequiredBytes, fit: fit))
                 .task(id: found.id) { listings.load(found, on: model) }
         }
@@ -84,7 +85,11 @@ struct ModelsTable: View {
         case .unknown: "Download size unknown."
         }
         guard let required else { return download }
-        let more = fit == .doesNotFit ? ", more than it has" : ""
+        let more = switch fit {
+        case .doesNotFit: ", more than it has"
+        case .tight: ", leaving little to spare"
+        case .fits, .unknown: ""
+        }
         return "\(download) Needs \(Format.bytes(required)) of memory on this server\(more)."
     }
 

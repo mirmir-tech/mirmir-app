@@ -22,6 +22,7 @@ extension MemoryFit {
     init(wire: String) {
         switch wire {
         case "fits": self = .fits
+        case "tight": self = .tight
         case "does_not_fit": self = .doesNotFit
         default: self = .unknown
         }

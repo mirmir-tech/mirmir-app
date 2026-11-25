@@ -87,7 +87,7 @@ struct QuantizationSection: View {
             .pickerStyle(.menu)
             if let variant = choices.variant(of: result) {
                 InspectorRow("Size", value: size(variant.size))
-                InspectorRow("Memory", value: memory(variant), color: variant.memoryFit == .doesNotFit ? Palette.danger : nil)
+                InspectorRow("Memory", value: variant.memoryFit.summary(needs: variant.requiredBytes), color: variant.memoryFit.color)
             }
             switch listing {
             case .failed(let reason)?:
@@ -104,21 +104,12 @@ struct QuantizationSection: View {
         if listing == .listing { ProgressView().controlSize(.mini) }
     }
 
+    /// The choice with its size, and a tight or failed fit marked.
     private func label(_ variant: CatalogVariant) -> String {
-        variant.label(defaultVariant: result.defaultVariant)
+        variant.label(defaultVariant: result.defaultVariant) + variant.memoryFit.marker
     }
 
     private func size(_ size: VariantSize) -> String { size.label }
-
-    private func memory(_ variant: CatalogVariant) -> String {
-        let needs = variant.requiredBytes.map { "Needs \(Format.bytes($0))" }
-        let fit: String? = switch variant.memoryFit {
-        case .fits: "fits"
-        case .doesNotFit: "does not fit"
-        case .unknown: nil
-        }
-        return [needs, fit].compactMap(\.self).joined(separator: ", ")
-    }
 }
 
 extension VariantSize {

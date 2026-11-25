@@ -37,7 +37,7 @@ struct HubInspector: View {
                 }
                 InspectorSection("On this server") {
                     if result.variants.isEmpty {
-                        InspectorRow("Memory", value: memory, color: result.memoryFit == .doesNotFit ? Palette.danger : nil)
+                        InspectorRow("Memory", value: result.memoryFit.summary(needs: result.estimatedRequiredBytes), color: result.memoryFit.color)
                     }
                     InspectorRow("Compatibility", value: result.compatibility)
                     if !result.reason.isEmpty { InspectorNote(result.reason) }
@@ -53,16 +53,6 @@ struct HubInspector: View {
             .padding(16)
         }
         .task(id: found.id) { listings.load(found, on: model) }
-    }
-
-    private var memory: String {
-        let needs = result.estimatedRequiredBytes.map { "Needs \(Format.bytes($0))" }
-        let fit: String? = switch result.memoryFit {
-        case .fits: "fits"
-        case .doesNotFit: "does not fit"
-        case .unknown: nil
-        }
-        return [needs, fit].compactMap(\.self).joined(separator: ", ")
     }
 }
 
