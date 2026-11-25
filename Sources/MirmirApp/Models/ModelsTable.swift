@@ -81,14 +81,8 @@ struct ModelsTable: View {
             )
         case .download(let download):
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
-        case .hub(let result) where result.variants.count > 1:
-            HubVariantMenu(result: result, choices: choices, model: model, start: download)
         case .hub(let result):
-            let pullID = result.pullID(for: result.defaultChoice)
-            HubAction(
-                result: result, pullID: pullID, download: model.downloads[pullID],
-                downloaded: model.isDownloaded(result), start: download
-            )
+            HubDownload(result: result, choices: choices, model: model, start: download)
         }
     }
 }
