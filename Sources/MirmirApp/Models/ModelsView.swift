@@ -12,6 +12,7 @@ struct ModelsView: View {
     @State private var query = ""
     @State private var hub = HubSearch()
     @State private var choices = VariantChoices()
+    @State private var listings = HubListings()
     @State private var showInspector = true
     /// Bumped to focus the search field.
     @State private var searchFocus = 0
@@ -50,7 +51,7 @@ struct ModelsView: View {
 
     var body: some View {
         let rows = rows
-        ModelsTable(rows: rows, selection: $selection, choices: choices, download: download)
+        ModelsTable(rows: rows, selection: $selection, choices: choices, listings: listings, download: download)
             .overlay { if rows.isEmpty { empty } }
             // Finder-like progress over the list, so nothing in the toolbar
             // moves while the Hub is searched.
@@ -170,7 +171,7 @@ struct ModelsView: View {
         } else if let repoID = selection.flatMap(ModelRow.downloadRepo(of:)), let download = model.downloads[repoID] {
             DownloadInspector(download: download)
         } else if let repoID = selection.flatMap(ModelRow.hubRepo(of:)), let result = hub.results.first(where: { $0.id == repoID }) {
-            HubInspector(result: result, choices: choices, download: download)
+            HubInspector(found: result, choices: choices, listings: listings, download: download)
         } else {
             EmptyState(title: "No selection", message: "Select a model to inspect it.", symbol: "shippingbox")
         }

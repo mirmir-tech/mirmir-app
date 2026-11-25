@@ -21,10 +21,22 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
     /// The variant a download of `id` alone takes; the row's size and
     /// memory fit are its own.
     public internal(set) var defaultVariant: String? = nil
+    /// The weights to download, estimated from the parameter count; a GGUF
+    /// repository's variants carry their own sizes.
+    public internal(set) var estimatedWeightBytes: UInt64? = nil
 
     /// The variant a download takes when none is chosen.
     public var defaultChoice: CatalogVariant? {
         variants.first { $0.name == defaultVariant } ?? variants.first
+    }
+
+    /// The result with the variants its files list, exactly sized, and the
+    /// default those sizes give.
+    public func listing(_ listed: ModelVariants) -> CatalogModel {
+        var result = self
+        result.variants = listed.variants
+        result.defaultVariant = listed.defaultVariant
+        return result
     }
 
     /// What `PullModel` takes for `variant`: `id:name`, or `id` alone.

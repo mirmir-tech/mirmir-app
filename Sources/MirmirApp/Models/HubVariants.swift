@@ -17,76 +17,91 @@ final class VariantChoices {
         names[result.id] = name
     }
 
-    /// The chosen variant among `variants`, else the repository's default.
-    func variant(of result: CatalogModel, among variants: [CatalogVariant]? = nil) -> CatalogVariant? {
+    /// The chosen variant, else the repository's default.
+    func variant(of result: CatalogModel) -> CatalogVariant? {
         let name = name(for: result)
-        return (variants ?? result.variants).first { $0.name == name } ?? result.defaultChoice
+        return result.variants.first { $0.name == name } ?? result.defaultChoice
     }
 }
 
-/// A GGUF repository's quantizations for the inspector: the search's
-/// estimates until the server lists the files, then their exact sizes.
+/// GGUF repositories' files as the server lists them, shared by the table
+/// and the inspector: a search sizes the variants from the parameter count,
+/// the listing exactly. Each repository is listed once, when its row or its
+/// inspector first shows.
 @MainActor
 @Observable
-final class HubVariants {
+final class HubListings {
     enum Listing: Equatable {
-        case estimated
         case listing
-        case listed
+        case listed(ModelVariants)
         case failed(String)
     }
 
-    private(set) var choices: [CatalogVariant] = []
-    private(set) var listing: Listing = .estimated
+    private var listings: [String: Listing] = [:]
 
-    /// Starts from the search's variants, then lists the files; run from
-    /// `.task(id:)` keyed by the repository.
-    func load(_ result: CatalogModel, on model: AppModel) async {
-        choices = result.variants
-        listing = .estimated
+    func listing(of result: CatalogModel) -> Listing? {
+        listings[result.id]
+    }
+
+    /// The result with its listed variants, else as the search sized them.
+    func resolve(_ result: CatalogModel) -> CatalogModel {
+        guard case .listed(let variants) = listings[result.id] else { return result }
+        return result.listing(variants)
+    }
+
+    /// Lists a GGUF repository's files unless it is listed or being listed.
+    /// The request outlives the row that asked for it, so a row scrolled
+    /// away does not cancel what the inspector also waits for.
+    func load(_ result: CatalogModel, on model: AppModel) {
         guard !result.variants.isEmpty else { return }
-        listing = .listing
-        do {
-            let listed = try await model.variants(of: result)
-            guard !Task.isCancelled else { return }
-            choices = listed.variants
-            listing = .listed
-        } catch {
-            guard !Task.isCancelled else { return }
-            listing = .failed(error.localizedDescription)
+        switch listings[result.id] {
+        case .listing?, .listed?: return
+        case .failed?, nil: break
+        }
+        listings[result.id] = .listing
+        Task {
+            do {
+                listings[result.id] = .listed(try await model.variants(of: result))
+            } catch {
+                listings[result.id] = .failed(error.localizedDescription)
+            }
         }
     }
 }
 
 /// The quantization to download, with each one's size and memory fit.
 struct QuantizationSection: View {
-    let variants: HubVariants
+    let listing: HubListings.Listing?
     let choices: VariantChoices
+    /// Resolved through `HubListings`.
     let result: CatalogModel
 
     var body: some View {
         InspectorSection(title: "Quantization", accessory: { accessory }) {
             Picker("Quantization", selection: Binding(get: { choices.name(for: result) }, set: { choices.choose($0, for: result) })) {
-                ForEach(variants.choices) { variant in
+                ForEach(result.variants) { variant in
                     Text(label(variant)).tag(Optional(variant.name))
                 }
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            if let variant = choices.variant(of: result, among: variants.choices) {
+            if let variant = choices.variant(of: result) {
                 InspectorRow("Size", value: size(variant.size))
                 InspectorRow("Memory", value: memory(variant), color: variant.memoryFit == .doesNotFit ? Palette.danger : nil)
             }
-            if case .failed(let reason) = variants.listing {
+            switch listing {
+            case .failed(let reason)?:
                 InspectorNote("Sizes are estimated: \(reason)")
-            } else if variants.listing != .listed {
+            case .listed?:
+                EmptyView()
+            case .listing?, nil:
                 InspectorNote("Sizes are estimated from the parameter count until the files are listed.")
             }
         }
     }
 
     @ViewBuilder private var accessory: some View {
-        if variants.listing == .listing { ProgressView().controlSize(.mini) }
+        if listing == .listing { ProgressView().controlSize(.mini) }
     }
 
     private func label(_ variant: CatalogVariant) -> String {

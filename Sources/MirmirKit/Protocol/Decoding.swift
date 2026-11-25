@@ -193,7 +193,8 @@ extension CatalogModel {
             features: ModelFeatures(toolUse: wire.toolUse, thinking: wire.thinking, vision: wire.vision),
             encoding: wire.hasEncoding ? wire.encoding : nil,
             variants: wire.variants.map(CatalogVariant.init),
-            defaultVariant: wire.hasDefaultVariant ? wire.defaultVariant : nil
+            defaultVariant: wire.hasDefaultVariant ? wire.defaultVariant : nil,
+            estimatedWeightBytes: wire.hasEstimatedWeightBytes ? wire.estimatedWeightBytes : nil
         )
     }
 }

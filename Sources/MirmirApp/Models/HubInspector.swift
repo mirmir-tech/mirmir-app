@@ -4,13 +4,17 @@ import SwiftUI
 /// A Hugging Face result: whether it runs on this server, and Download.
 struct HubInspector: View {
     @Environment(AppModel.self) private var model
-    let result: CatalogModel
+    /// As the search found it; its listing sizes the variants exactly.
+    let found: CatalogModel
     let choices: VariantChoices
+    let listings: HubListings
     let download: (String) -> Void
-    @State private var variants = HubVariants()
+
+    private var result: CatalogModel { listings.resolve(found) }
 
     var body: some View {
-        let variant = choices.variant(of: result, among: variants.choices)
+        let result = result
+        let variant = choices.variant(of: result)
         let pullID = result.pullID(for: variant)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -29,7 +33,7 @@ struct HubInspector: View {
                     .font(.system(size: 12))
                 }
                 if !result.variants.isEmpty {
-                    QuantizationSection(variants: variants, choices: choices, result: result)
+                    QuantizationSection(listing: listings.listing(of: found), choices: choices, result: result)
                 }
                 InspectorSection("On this server") {
                     if result.variants.isEmpty {
@@ -48,7 +52,7 @@ struct HubInspector: View {
             }
             .padding(16)
         }
-        .task(id: result.id) { await variants.load(result, on: model) }
+        .task(id: found.id) { listings.load(found, on: model) }
     }
 
     private var memory: String {

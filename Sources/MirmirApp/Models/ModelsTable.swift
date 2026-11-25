@@ -8,6 +8,7 @@ struct ModelsTable: View {
     let rows: [ModelRow]
     @Binding var selection: String?
     let choices: VariantChoices
+    let listings: HubListings
     let download: (String) -> Void
 
     var body: some View {
@@ -21,7 +22,7 @@ struct ModelsTable: View {
             TableColumn("Features") { row in FeatureChips(features: features(row)) }
                 // Room for all three chips; the rest goes to the name.
                 .width(min: 215, ideal: 215, max: 240)
-            TableColumn("Size") { row in size(row) }
+            TableColumn("Size") { row in size(row, app) }
                 .width(80)
             TableColumn("Status") { row in status(row, app) }
                 .width(min: 120, ideal: 170)
@@ -55,21 +56,36 @@ struct ModelsTable: View {
         .padding(.vertical, 3)
     }
 
-    @ViewBuilder private func size(_ row: ModelRow) -> some View {
+    @ViewBuilder private func size(_ row: ModelRow, _ model: AppModel) -> some View {
         switch row {
         case .model(let local):
             Text(Format.bytes(local.sizeBytes)).font(.mono(12))
         case .download(let download):
             Text(download.totalBytes.map(Format.bytes) ?? "—").font(.mono(12)).foregroundStyle(.secondary)
-        case .hub(let result):
-            // What the chosen quantization needs here, red when it does not fit.
+        case .hub(let found):
+            // What the chosen quantization downloads, as the local row will
+            // show it; red when what it needs here does not fit. A GGUF row
+            // lists its files once shown, for their exact sizes.
+            let result = listings.resolve(found)
             let variant = choices.variant(of: result)
-            let required = variant.map(\.requiredBytes) ?? result.estimatedRequiredBytes
+            let size = variant?.size ?? result.estimatedWeightBytes.map(VariantSize.estimated) ?? .unknown
             let fit = variant?.memoryFit ?? result.memoryFit
-            Text(required.map(Format.bytes) ?? "—").font(.mono(12))
+            Text(size.label).font(.mono(12))
                 .foregroundStyle(fit == .doesNotFit ? Palette.danger : .secondary)
-                .help("Memory it needs on this server")
+                .help(sizeHelp(size, required: variant?.requiredBytes ?? result.estimatedRequiredBytes, fit: fit))
+                .task(id: found.id) { listings.load(found, on: model) }
         }
+    }
+
+    private func sizeHelp(_ size: VariantSize, required: UInt64?, fit: MemoryFit) -> String {
+        let download = switch size {
+        case .exact: "Download size."
+        case .estimated: "Download size, estimated from the parameter count."
+        case .unknown: "Download size unknown."
+        }
+        guard let required else { return download }
+        let more = fit == .doesNotFit ? ", more than it has" : ""
+        return "\(download) Needs \(Format.bytes(required)) of memory on this server\(more)."
     }
 
     @ViewBuilder private func status(_ row: ModelRow, _ model: AppModel) -> some View {
@@ -82,7 +98,7 @@ struct ModelsTable: View {
         case .download(let download):
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
         case .hub(let result):
-            HubDownload(result: result, choices: choices, model: model, start: download)
+            HubDownload(result: listings.resolve(result), choices: choices, model: model, start: download)
         }
     }
 }
