@@ -14,7 +14,7 @@ struct HubDownload: View {
     var body: some View {
         let variant = choices.variant(of: result)
         let pullID = result.pullID(for: variant)
-        if let download = model.downloads[pullID] {
+        if let download = model.download(for: pullID) {
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
         } else {
             let downloaded = model.isDownloaded(result, variant: variant)
@@ -56,7 +56,7 @@ struct HubDownload: View {
     }
 
     private func menuLabel(_ variant: CatalogVariant) -> String {
-        variant.label(defaultVariant: result.defaultVariant) + variant.memoryFit.marker
+        variant.label(defaultVariant: result.defaultVariant, downloaded: model.isDownloaded(result, variant: variant)) + variant.memoryFit.marker
     }
 }
 

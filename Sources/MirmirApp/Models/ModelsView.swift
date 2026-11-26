@@ -103,10 +103,15 @@ struct ModelsView: View {
                 .background(Palette.canvas)
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
         }
-        // Keyed by the text: typing again cancels the pending search.
-        .task(id: searchesHub ? query : "") {
+        // Keyed by server and text: switching servers or typing again cancels
+        // the pending search and queries the active server.
+        .task(id: searchesHub ? "\(model.currentInstanceID.uuidString):\(query)" : "") {
             // Ready and Downloading keep the last results for coming back.
             if searchesHub { await hub.search(query, on: model) }
+        }
+        .onChange(of: model.currentInstanceID) { _, instance in
+            hub.clear()
+            listings.reset(for: instance)
         }
         .onChange(of: scope, initial: true) { _, scope in
             if scope == .hub { searchFocus += 1 }

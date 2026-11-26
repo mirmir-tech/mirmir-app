@@ -21,7 +21,7 @@ struct HubInspector: View {
                 InspectorHeader(title: result.name, subtitle: result.id, features: result.features)
                 HStack {
                     HubAction(
-                        result: result, pullID: pullID, download: model.downloads[pullID],
+                        result: result, pullID: pullID, download: model.download(for: pullID),
                         downloaded: model.isDownloaded(result, variant: variant), start: download,
                         label: variant.map { "Download \($0.name)" } ?? "Download"
                     )
@@ -33,7 +33,10 @@ struct HubInspector: View {
                     .font(.system(size: 12))
                 }
                 if !result.variants.isEmpty {
-                    QuantizationSection(listing: listings.listing(of: found), choices: choices, result: result)
+                    QuantizationSection(
+                        listing: listings.listing(of: found), choices: choices, result: result,
+                        isDownloaded: { model.isDownloaded(result, variant: $0) }
+                    )
                 }
                 InspectorSection("On this server") {
                     if result.variants.isEmpty {
@@ -52,7 +55,7 @@ struct HubInspector: View {
             }
             .padding(16)
         }
-        .task(id: found.id) { listings.load(found, on: model) }
+        .task(id: "\(model.currentInstanceID.uuidString):\(found.id)") { listings.load(found, on: model) }
     }
 }
 

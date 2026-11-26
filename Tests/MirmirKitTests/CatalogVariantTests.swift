@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import MirmirKit
 
@@ -43,4 +44,37 @@ struct CatalogVariantTests {
         )
         #expect(local.displayName == "gemma-4-E4B-it-GGUF · Q8_0")
     }
+
+    #if canImport(Darwin)
+    @Test @MainActor func matchesInstalledVariantsAndDownloadsInAnyCase() throws {
+        let model = AppModel.preview()
+        let connection = try #require(model.connection)
+        let installed = LocalModel(
+            selector: "ggml-org--gemma-4-E4B-it-GGUF@q8_0",
+            repoID: "GGML-ORG/gemma-4-e4b-it-gguf:q8_0",
+            commit: "abc", path: "/tmp/model", state: .available, loadability: .loadable,
+            modelClass: "", encoding: nil, container: "gguf", sizeBytes: 9_000,
+            features: [], imageInput: false, managed: true, recentRank: nil
+        )
+        model.models = [installed]
+        model.apply(Activity(
+            id: "pull-q4", kind: .pull, target: "GGML-ORG/gemma-4-e4b-it-gguf:q4_0",
+            state: .running, stage: "downloading", detail: "",
+            startedAt: Date(), updatedAt: Date(), cancellable: true,
+            progress: ActivityProgress(current: 1_000, total: 5_000)
+        ), from: connection)
+        model.apply(Activity(
+            id: "pull-q8", kind: .pull, target: "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+            state: .running, stage: "validating", detail: "",
+            startedAt: Date(), updatedAt: Date(), cancellable: false, progress: nil
+        ), from: connection)
+        let result = repository(default: "Q8_0")
+        #expect(model.isDownloaded(result, variant: result.variants[1]))
+        #expect(!model.isDownloaded(result, variant: result.variants[0]))
+        #expect(model.download(for: result.pullID(for: result.variants[0]))?.cancellableOperation == "pull-q4")
+        #expect(model.download(of: installed)?.stage == "Validating")
+        #expect(model.unlistedDownloads.contains { $0.repoID == "GGML-ORG/gemma-4-e4b-it-gguf:q4_0" })
+        #expect(!model.unlistedDownloads.contains { $0.repoID == "ggml-org/gemma-4-E4B-it-GGUF:Q8_0" })
+    }
+    #endif
 }

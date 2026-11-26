@@ -61,8 +61,8 @@ extension AppModel {
     /// Downloads whose checkpoint the server does not list yet, newest
     /// repository name first.
     public var unlistedDownloads: [ModelDownload] {
-        let listed = Set(models.map(\.repoID))
-        return downloads.values.filter { !listed.contains($0.repoID) }.sorted { $0.repoID < $1.repoID }
+        let listed = Set(models.map { $0.repoID.lowercased() })
+        return downloads.values.filter { !listed.contains($0.repoID.lowercased()) }.sorted { $0.repoID < $1.repoID }
     }
 
     /// Whether the server has the search result's checkpoint now, complete.
@@ -78,7 +78,7 @@ extension AppModel {
     /// without one) as on disk.
     public func isDownloaded(_ result: CatalogModel, variant: CatalogVariant?) -> Bool {
         let id = result.pullID(for: variant)
-        return models.contains { $0.repoID == id && $0.state.isOnDisk }
+        return models.contains { sameRepoID($0.repoID, id) && $0.state.isOnDisk }
     }
 
     public func variants(of result: CatalogModel) async throws(ConnectionError) -> ModelVariants {
@@ -89,7 +89,18 @@ extension AppModel {
     /// The running download of the model's repository.
     public func download(of local: LocalModel) -> ModelDownload? {
         guard !local.repoID.isEmpty else { return nil }
-        return downloads[local.repoID]
+        return download(for: local.repoID)
+    }
+
+    /// The running download matching `repoID` in any spelling, as the Hub
+    /// and server resolve repository and variant ids case-insensitively.
+    public func download(for repoID: String) -> ModelDownload? {
+        if let direct = downloads[repoID] { return direct }
+        return downloads.values.first { sameRepoID($0.repoID, repoID) }
+    }
+
+    private func sameRepoID(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.caseInsensitiveCompare(rhs) == .orderedSame
     }
 
     public func cancel(_ download: ModelDownload) {

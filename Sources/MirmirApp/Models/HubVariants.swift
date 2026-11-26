@@ -37,7 +37,16 @@ final class HubListings {
         case failed(String)
     }
 
+    private var server: InstanceRecord.ID?
     private var listings: [String: Listing] = [:]
+
+    /// Discards cached listings when the active server changes, so another
+    /// server's memory fits and defaults never stay shown.
+    func reset(for server: InstanceRecord.ID) {
+        guard self.server != server else { return }
+        self.server = server
+        listings = [:]
+    }
 
     func listing(of result: CatalogModel) -> Listing? {
         listings[result.id]
@@ -49,11 +58,14 @@ final class HubListings {
         return result.listing(variants)
     }
 
-    /// Lists a GGUF repository's files unless it is listed or being listed.
-    /// The request outlives the row that asked for it, so a row scrolled
-    /// away does not cancel what the inspector also waits for.
+    /// Lists a GGUF repository's files unless it is listed or being listed
+    /// for the current server. The request outlives the row that asked for
+    /// it, so a row scrolled away does not cancel what the inspector also
+    /// waits for, but a late reply after a server switch is dropped.
     func load(_ result: CatalogModel, on model: AppModel) {
         guard !result.variants.isEmpty else { return }
+        let instance = model.currentInstanceID
+        reset(for: instance)
         switch listings[result.id] {
         case .listing?, .listed?: return
         case .failed?, nil: break
@@ -61,8 +73,11 @@ final class HubListings {
         listings[result.id] = .listing
         Task {
             do {
-                listings[result.id] = .listed(try await model.variants(of: result))
+                let listed = try await model.variants(of: result)
+                guard self.server == instance else { return }
+                listings[result.id] = .listed(listed)
             } catch {
+                guard self.server == instance else { return }
                 listings[result.id] = .failed(error.localizedDescription)
             }
         }
@@ -75,6 +90,7 @@ struct QuantizationSection: View {
     let choices: VariantChoices
     /// Resolved through `HubListings`.
     let result: CatalogModel
+    let isDownloaded: (CatalogVariant) -> Bool
 
     var body: some View {
         InspectorSection(title: "Quantization", accessory: { accessory }) {
@@ -106,7 +122,7 @@ struct QuantizationSection: View {
 
     /// The choice with its size, and a tight or failed fit marked.
     private func label(_ variant: CatalogVariant) -> String {
-        variant.label(defaultVariant: result.defaultVariant) + variant.memoryFit.marker
+        variant.label(defaultVariant: result.defaultVariant, downloaded: isDownloaded(variant)) + variant.memoryFit.marker
     }
 
     private func size(_ size: VariantSize) -> String { size.label }
@@ -125,9 +141,9 @@ extension VariantSize {
 
 extension CatalogVariant {
     /// The variant with its size, the default and a downloaded mark.
-    func label(defaultVariant: String?) -> String {
+    func label(defaultVariant: String?, downloaded: Bool? = nil) -> String {
         let marker = name == defaultVariant ? " (default)" : ""
-        let downloaded = downloaded ? " ✓" : ""
+        let downloaded = (downloaded ?? self.downloaded) ? " ✓" : ""
         return "\(name) · \(size.label)\(marker)\(downloaded)"
     }
 }
