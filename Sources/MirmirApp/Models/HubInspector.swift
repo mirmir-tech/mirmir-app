@@ -7,7 +7,7 @@ struct HubInspector: View {
     /// As the search found it; its listing sizes the variants exactly.
     let found: CatalogModel
     let choices: VariantChoices
-    let listings: HubListings
+    let listings: VariantListings
     let download: (String) -> Void
 
     private var result: CatalogModel { listings.resolve(found) }
@@ -27,10 +27,12 @@ struct HubInspector: View {
                     )
                         .buttonStyle(.borderedProminent)
                     Spacer()
-                    Link(destination: URL(string: "https://huggingface.co/\(result.id)")!) {
-                        Label("Hugging Face", systemImage: "arrow.up.right.square")
+                    if let page = result.hubPage {
+                        Link(destination: page) {
+                            Label("Hugging Face", systemImage: "arrow.up.right.square")
+                        }
+                        .font(.system(size: 12))
                     }
-                    .font(.system(size: 12))
                 }
                 if !result.variants.isEmpty {
                     QuantizationSection(
@@ -43,7 +45,11 @@ struct HubInspector: View {
                         InspectorRow("Memory", value: result.memoryFit.summary(needs: result.estimatedRequiredBytes), color: result.memoryFit.color)
                     }
                     InspectorRow("Compatibility", value: result.compatibility)
-                    if !result.reason.isEmpty { InspectorNote(result.reason) }
+                    // The server judges a GGUF repository by its default
+                    // quantization; another chosen one has its own fit above.
+                    if !result.reason.isEmpty, result.variants.isEmpty || variant?.name == result.defaultVariant {
+                        InspectorNote(result.reason)
+                    }
                     if result.gated { InspectorNote("Gated: accept its terms on Hugging Face and add your token in Configuration.") }
                 }
                 InspectorSection("Model") {
@@ -55,7 +61,7 @@ struct HubInspector: View {
             }
             .padding(16)
         }
-        .task(id: "\(model.currentInstanceID.uuidString):\(found.id)") { listings.load(found, on: model) }
+        .task(id: "\(model.connectionGeneration):\(found.id)") { listings.load(found, on: model) }
     }
 }
 

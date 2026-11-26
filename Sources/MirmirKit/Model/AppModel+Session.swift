@@ -18,6 +18,7 @@ extension AppModel {
                     // pause and restart once it is verified as its helper.
                     await supervisor.recover(serving: socket)
                 }
+                connectionGeneration &+= 1
                 phase = .connected(connection)
                 summaries[instance.id] = InstanceSummary(status: .online(connection.health), telemetry: nil, loadedModels: [])
                 let lost = await runConnected(connection, instance: instance)

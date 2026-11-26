@@ -17,6 +17,12 @@ final class VariantChoices {
         names[result.id] = name
     }
 
+    /// Forgets every choice: another server, or the same one reconnected,
+    /// has its own memory and so its own default for each repository.
+    func reset() {
+        names = [:]
+    }
+
     /// The chosen variant, else the repository's default.
     func variant(of result: CatalogModel) -> CatalogVariant? {
         let name = name(for: result)
@@ -26,69 +32,36 @@ final class VariantChoices {
 
 /// GGUF repositories' files as the server lists them, shared by the table
 /// and the inspector: a search sizes the variants from the parameter count,
-/// the listing exactly. Each repository is listed once, when its row or its
-/// inspector first shows.
-@MainActor
-@Observable
-final class HubListings {
-    enum Listing: Equatable {
-        case listing
-        case listed(ModelVariants)
-        case failed(String)
-    }
-
-    private var server: InstanceRecord.ID?
-    private var listings: [String: Listing] = [:]
-
-    /// Discards cached listings when the active server changes, so another
-    /// server's memory fits and defaults never stay shown.
-    func reset(for server: InstanceRecord.ID) {
-        guard self.server != server else { return }
-        self.server = server
-        listings = [:]
-    }
-
+/// the listing exactly. Each repository is listed once per connection, when
+/// its row or its inspector first shows; `VariantListings` keeps a listing
+/// to the connection that asked for it.
+extension VariantListings {
     func listing(of result: CatalogModel) -> Listing? {
-        listings[result.id]
+        listing(of: result.id)
     }
 
     /// The result with its listed variants, else as the search sized them.
     func resolve(_ result: CatalogModel) -> CatalogModel {
-        guard case .listed(let variants) = listings[result.id] else { return result }
+        guard case .listed(let variants) = listing(of: result.id) else { return result }
         return result.listing(variants)
     }
 
-    /// Lists a GGUF repository's files unless it is listed or being listed
-    /// for the current server. The request outlives the row that asked for
-    /// it, so a row scrolled away does not cancel what the inspector also
-    /// waits for, but a late reply after a server switch is dropped.
+    /// Lists a GGUF repository's files for the current connection. The
+    /// request outlives the row that asked for it, so a row scrolled away
+    /// does not cancel what the inspector also waits for.
     func load(_ result: CatalogModel, on model: AppModel) {
         guard !result.variants.isEmpty else { return }
-        let instance = model.currentInstanceID
-        reset(for: instance)
-        switch listings[result.id] {
-        case .listing?, .listed?: return
-        case .failed?, nil: break
-        }
-        listings[result.id] = .listing
-        Task {
-            do {
-                let listed = try await model.variants(of: result)
-                guard self.server == instance else { return }
-                listings[result.id] = .listed(listed)
-            } catch {
-                guard self.server == instance else { return }
-                listings[result.id] = .failed(error.localizedDescription)
-            }
+        load(result.id, generation: model.connectionGeneration) {
+            try await model.variants(of: result)
         }
     }
 }
 
 /// The quantization to download, with each one's size and memory fit.
 struct QuantizationSection: View {
-    let listing: HubListings.Listing?
+    let listing: VariantListings.Listing?
     let choices: VariantChoices
-    /// Resolved through `HubListings`.
+    /// Resolved through `VariantListings`.
     let result: CatalogModel
     let isDownloaded: (CatalogVariant) -> Bool
 

@@ -12,7 +12,7 @@ struct ModelsView: View {
     @State private var query = ""
     @State private var hub = HubSearch()
     @State private var choices = VariantChoices()
-    @State private var listings = HubListings()
+    @State private var listings = VariantListings()
     @State private var showInspector = true
     /// Bumped to focus the search field.
     @State private var searchFocus = 0
@@ -103,15 +103,21 @@ struct ModelsView: View {
                 .background(Palette.canvas)
                 .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
         }
-        // Keyed by server and text: switching servers or typing again cancels
-        // the pending search and queries the active server.
-        .task(id: searchesHub ? "\(model.currentInstanceID.uuidString):\(query)" : "") {
+        // Keyed by connection and text: switching servers, reconnecting or
+        // typing again cancels the pending search and asks the server now
+        // connected, whose memory fits and defaults the results carry.
+        .task(id: searchesHub ? "\(model.connectionGeneration):\(query)" : "") {
             // Ready and Downloading keep the last results for coming back.
             if searchesHub { await hub.search(query, on: model) }
         }
-        .onChange(of: model.currentInstanceID) { _, instance in
+        .onChange(of: model.currentInstanceID) { _, _ in
             hub.clear()
-            listings.reset(for: instance)
+        }
+        // Another server, or this one at a new address or reconnected: its
+        // own listings, memory fits and default quantizations.
+        .onChange(of: model.connectionGeneration) { _, generation in
+            listings.reset(for: generation)
+            choices.reset()
         }
         .onChange(of: scope, initial: true) { _, scope in
             if scope == .hub { searchFocus += 1 }

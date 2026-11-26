@@ -8,7 +8,7 @@ struct ModelsTable: View {
     let rows: [ModelRow]
     @Binding var selection: String?
     let choices: VariantChoices
-    let listings: HubListings
+    let listings: VariantListings
     let download: (String) -> Void
 
     var body: some View {
@@ -74,7 +74,7 @@ struct ModelsTable: View {
             Text(size.label).font(.mono(12))
                 .foregroundStyle(fit.color ?? .secondary)
                 .help(sizeHelp(size, required: variant?.requiredBytes ?? result.estimatedRequiredBytes, fit: fit))
-                .task(id: "\(model.currentInstanceID.uuidString):\(found.id)") { listings.load(found, on: model) }
+                .task(id: "\(model.connectionGeneration):\(found.id)") { listings.load(found, on: model) }
         }
     }
 
