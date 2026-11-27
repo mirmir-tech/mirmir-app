@@ -130,6 +130,31 @@ struct VariantListingsTests {
         #expect(listings.listing(of: offered.id, offer: offered.offeredVariants) == .listed(listed("Q4_K_M")))
     }
 
+    /// Even when a repository's offered variants change A -> B -> A on one
+    /// connection, a late reply from the first A request cannot overwrite the
+    /// newer A reply.
+    @Test func aLateReplyAfterOfferReturnsToOriginalIsDropped() async throws {
+        let listings = VariantListings()
+        let firstA = Pending(), midB = Pending(), secondA = Pending()
+        let offerA = ["Q4_K_M", "Q8_0"], offerB = ["Q4_K_M"]
+        let taskFirstA = listings.load("owner/model", offer: offerA, generation: 1, fetch: { try await firstA.fetch() })
+        await Task.yield()
+        let taskMidB = listings.load("owner/model", offer: offerB, generation: 1, fetch: { try await midB.fetch() })
+        await Task.yield()
+        let taskSecondA = listings.load("owner/model", offer: offerA, generation: 1, fetch: { try await secondA.fetch() })
+        await Task.yield()
+
+        secondA.reply(listed("Q4_K_M"))
+        await taskSecondA?.value
+        #expect(listings.listing(of: "owner/model", offer: offerA) == .listed(listed("Q4_K_M")))
+
+        firstA.reply(listed("Q8_0"))
+        await taskFirstA?.value
+        midB.reply(listed("Q4_K_M"))
+        await taskMidB?.value
+        #expect(listings.listing(of: "owner/model", offer: offerA) == .listed(listed("Q4_K_M")))
+    }
+
     /// Switching servers, switching back and editing a server's address
     /// each start a new connection generation; a rename does not.
     @Test func connectionsCountSwitchesAndAddressEdits() {

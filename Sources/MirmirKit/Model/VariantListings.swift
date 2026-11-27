@@ -19,13 +19,15 @@ public final class VariantListings {
         case failed(String)
     }
 
-    /// A repository's listing and the offer it was asked for.
+    /// A repository's listing and the offer and request that asked for it.
     private struct Entry {
         let offer: [String]
+        let requestID: UInt64
         let listing: Listing
     }
 
     private var generation: UInt64?
+    private var nextRequestID: UInt64 = 0
     private var listings: [String: Entry] = [:]
 
     public init() {}
@@ -56,7 +58,9 @@ public final class VariantListings {
         case .listing?, .listed?: return nil
         case .failed?, nil: break
         }
-        listings[repository] = Entry(offer: offer, listing: .listing)
+        nextRequestID += 1
+        let requestID = nextRequestID
+        listings[repository] = Entry(offer: offer, requestID: requestID, listing: .listing)
         return Task { @MainActor [weak self] in
             let reply: Listing
             do {
@@ -67,9 +71,9 @@ public final class VariantListings {
             } catch {
                 reply = .failed(error.localizedDescription)
             }
-            // A reply for an earlier connection or an earlier offer is stale.
-            guard let self, self.generation == generation, listings[repository]?.offer == offer else { return }
-            listings[repository] = Entry(offer: offer, listing: reply)
+            // A reply for an earlier connection or a superseded request is stale.
+            guard let self, self.generation == generation, listings[repository]?.requestID == requestID else { return }
+            listings[repository] = Entry(offer: offer, requestID: requestID, listing: reply)
         }
     }
 }
