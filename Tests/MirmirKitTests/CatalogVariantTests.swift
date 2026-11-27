@@ -112,6 +112,26 @@ struct CatalogReasonTests {
         #expect(relisted.reasonVariant == "Q8_0")
     }
 
+    /// The search judged `Q8_0` to fit by its estimate; the exact listing
+    /// keeps it the default but finds it does not fit. The estimate's
+    /// explanation no longer holds for it.
+    @Test func exactSizingThatReversesTheFitDropsTheEstimatesReason() {
+        let fitting = CatalogVariant(name: "Q8_0", size: .estimated(9_000), requiredBytes: 9_000, memoryFit: .fits, downloaded: false)
+        var found = CatalogModel(
+            id: "owner/model-GGUF", downloads: 0, likes: 0, gated: false, modelClass: "",
+            compatibility: "supported", memoryFit: .fits, estimatedRequiredBytes: 9_000,
+            reason: "estimated weights and runtime reserve fit the current budget",
+            downloaded: false, features: [], encoding: nil
+        )
+        found.variants = [fitting]
+        found.defaultVariant = "Q8_0"
+        #expect(found.reason(for: found.defaultChoice) != nil)
+        let exact = CatalogVariant(name: "Q8_0", size: .exact(90_000), requiredBytes: 90_000, memoryFit: .doesNotFit, downloaded: false)
+        let listed = found.listing(ModelVariants(variants: [exact], defaultVariant: "Q8_0"))
+        #expect(listed.defaultChoice?.memoryFit == .doesNotFit)
+        #expect(listed.reason(for: listed.defaultChoice) == nil)
+    }
+
     @Test func aRepositoryWithoutVariantsKeepsItsReason() {
         var plain = repository(reason: "needs 9 GB")
         plain.variants = []

@@ -89,6 +89,47 @@ struct VariantListingsTests {
         #expect(listings.listing(of: "owner/repo") == .listed(listed("Q2_K")))
     }
 
+    /// A listing of `Q8_0` is cached; a fresh search on the same connection
+    /// offers only `Q4_K_M`. The cached listing selects nothing for the new
+    /// offer, the repository is listed again, the download takes what is
+    /// offered, and a late reply for the old offer does not come back.
+    @Test func aFreshOfferWithoutTheCachedDefaultListsAgain() async throws {
+        let listings = VariantListings()
+        let old = Pending(), fresh = Pending()
+        let cached = listings.load("owner/model", offer: ["Q4_K_M", "Q8_0"], generation: 1, fetch: { try await old.fetch() })
+        await Task.yield()
+        old.reply(listed("Q8_0"))
+        await cached?.value
+        #expect(listings.listing(of: "owner/model", offer: ["Q4_K_M", "Q8_0"]) == .listed(listed("Q8_0")))
+
+        var offered = CatalogModel(
+            id: "owner/model", downloads: 0, likes: 0, gated: false, modelClass: "", compatibility: "supported",
+            memoryFit: .fits, estimatedRequiredBytes: nil, reason: "", downloaded: false, features: [], encoding: nil
+        )
+        offered.variants = listed("Q4_K_M").variants
+        offered.defaultVariant = "Q4_K_M"
+        #expect(listings.listing(of: offered.id, offer: offered.offeredVariants) == nil)
+        #expect(offered.pullID(for: offered.defaultChoice) == "owner/model:Q4_K_M")
+        let again = listings.load(offered.id, offer: offered.offeredVariants, generation: 1, fetch: { try await fresh.fetch() })
+        #expect(again != nil)
+        await Task.yield()
+        #expect(fresh.calls == 1)
+        fresh.reply(listed("Q4_K_M"))
+        await again?.value
+        #expect(listings.listing(of: offered.id, offer: offered.offeredVariants) == .listed(listed("Q4_K_M")))
+
+        // A reply for the old offer, delivered after the new one, is dropped.
+        let late = Pending()
+        let stale = listings.load("owner/model", offer: ["Q8_0"], generation: 1, fetch: { try await late.fetch() })
+        let current = listings.load(offered.id, offer: offered.offeredVariants, generation: 1, fetch: { try await fresh.fetch() })
+        await Task.yield()
+        fresh.reply(listed("Q4_K_M"))
+        await current?.value
+        late.reply(listed("Q8_0"))
+        await stale?.value
+        #expect(listings.listing(of: offered.id, offer: offered.offeredVariants) == .listed(listed("Q4_K_M")))
+    }
+
     /// Switching servers, switching back and editing a server's address
     /// each start a new connection generation; a rename does not.
     @Test func connectionsCountSwitchesAndAddressEdits() {

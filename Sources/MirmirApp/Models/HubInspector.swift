@@ -61,7 +61,7 @@ struct HubInspector: View {
             }
             .padding(16)
         }
-        .task(id: "\(model.connectionGeneration):\(found.id)") { listings.load(found, on: model) }
+        .task(id: "\(model.connectionGeneration):\(found.id):\(found.offeredVariants)") { listings.load(found, on: model) }
     }
 }
 

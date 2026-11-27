@@ -74,7 +74,7 @@ struct ModelsTable: View {
             Text(size.label).font(.mono(12))
                 .foregroundStyle(fit.color ?? .secondary)
                 .help(sizeHelp(size, required: variant?.requiredBytes ?? result.estimatedRequiredBytes, fit: fit))
-                .task(id: "\(model.connectionGeneration):\(found.id)") { listings.load(found, on: model) }
+                .task(id: "\(model.connectionGeneration):\(found.id):\(found.offeredVariants)") { listings.load(found, on: model) }
         }
     }
 

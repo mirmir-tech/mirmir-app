@@ -36,13 +36,15 @@ final class VariantChoices {
 /// its row or its inspector first shows; `VariantListings` keeps a listing
 /// to the connection that asked for it.
 extension VariantListings {
+    /// The listing of the variants `result` offers; none while a listing of
+    /// another offer is all there is.
     func listing(of result: CatalogModel) -> Listing? {
-        listing(of: result.id)
+        listing(of: result.id, offer: result.offeredVariants)
     }
 
     /// The result with its listed variants, else as the search sized them.
     func resolve(_ result: CatalogModel) -> CatalogModel {
-        guard case .listed(let variants) = listing(of: result.id) else { return result }
+        guard case .listed(let variants) = listing(of: result) else { return result }
         return result.listing(variants)
     }
 
@@ -51,7 +53,7 @@ extension VariantListings {
     /// does not cancel what the inspector also waits for.
     func load(_ result: CatalogModel, on model: AppModel) {
         guard !result.variants.isEmpty else { return }
-        load(result.id, generation: model.connectionGeneration) {
+        load(result.id, offer: result.offeredVariants, generation: model.connectionGeneration) {
             try await model.variants(of: result)
         }
     }

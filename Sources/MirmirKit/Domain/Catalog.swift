@@ -28,6 +28,12 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
     /// own default does not replace.
     var judged = JudgedVariant.theDefault
 
+    /// The variants the search offered, by name: what a listing of the
+    /// repository was asked for.
+    public var offeredVariants: [String] {
+        variants.map(\.name)
+    }
+
     /// The variant a download takes when none is chosen.
     public var defaultChoice: CatalogVariant? {
         variants.first { $0.name == defaultVariant } ?? variants.first
@@ -52,13 +58,15 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
     }
 
     /// The server's reason, where it is `variant`'s: a GGUF repository is
-    /// judged by the variant it would download by default, and another
-    /// variant's fit is its own — except when the whole repository is
-    /// unsupported, which applies to every variant.
+    /// judged by the variant it would download by default at the fit the
+    /// search gave it (`memoryFit`), and another variant's fit is its own,
+    /// as is the judged one's once exact sizes change it. A repository that
+    /// is unsupported as a whole is so for every variant.
     public func reason(for variant: CatalogVariant?) -> String? {
         guard !reason.isEmpty else { return nil }
         guard !variants.isEmpty, compatibility != "unsupported" else { return reason }
-        return variant?.name == reasonVariant ? reason : nil
+        guard let variant, variant.name == reasonVariant, variant.memoryFit == memoryFit else { return nil }
+        return reason
     }
 
     /// What `PullModel` takes for `variant`: `id:name`, or `id` alone.
