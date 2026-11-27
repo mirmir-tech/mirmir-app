@@ -137,6 +137,19 @@ public enum Mirmir_V1_Runtime: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListModelVariants" metadata.
+        public enum ListModelVariants: Sendable {
+            /// Request type for "ListModelVariants".
+            public typealias Input = Mirmir_V1_ListModelVariantsRequest
+            /// Response type for "ListModelVariants".
+            public typealias Output = Mirmir_V1_ListModelVariantsResponse
+            /// Descriptor for "ListModelVariants".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "mirmir.v1.Runtime"),
+                method: "ListModelVariants",
+                type: .unary
+            )
+        }
         /// Namespace for "PullModel" metadata.
         public enum PullModel: Sendable {
             /// Request type for "PullModel".
@@ -343,6 +356,7 @@ public enum Mirmir_V1_Runtime: Sendable {
             LoadModel.descriptor,
             UnloadModel.descriptor,
             SearchModels.descriptor,
+            ListModelVariants.descriptor,
             PullModel.descriptor,
             RemoveModel.descriptor,
             Generate.descriptor,
@@ -546,6 +560,25 @@ extension Mirmir_V1_Runtime {
             deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_SearchModelsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_SearchModelsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListModelVariants" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_ListModelVariantsRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_ListModelVariantsRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_ListModelVariantsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listModelVariants<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_ListModelVariantsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_ListModelVariantsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_ListModelVariantsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_ListModelVariantsResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "PullModel" method.
@@ -1116,6 +1149,36 @@ extension Mirmir_V1_Runtime {
             try await self.client.unary(
                 request: request,
                 descriptor: Mirmir_V1_Runtime.Method.SearchModels.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListModelVariants" method.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Mirmir_V1_ListModelVariantsRequest` message.
+        ///   - serializer: A serializer for `Mirmir_V1_ListModelVariantsRequest` messages.
+        ///   - deserializer: A deserializer for `Mirmir_V1_ListModelVariantsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listModelVariants<Result>(
+            request: GRPCCore.ClientRequest<Mirmir_V1_ListModelVariantsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Mirmir_V1_ListModelVariantsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Mirmir_V1_ListModelVariantsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_ListModelVariantsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Mirmir_V1_Runtime.Method.ListModelVariants.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -1800,6 +1863,31 @@ extension Mirmir_V1_Runtime.ClientProtocol {
         )
     }
 
+    /// Call the "ListModelVariants" method.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Mirmir_V1_ListModelVariantsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listModelVariants<Result>(
+        request: GRPCCore.ClientRequest<Mirmir_V1_ListModelVariantsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_ListModelVariantsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listModelVariants(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Mirmir_V1_ListModelVariantsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Mirmir_V1_ListModelVariantsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "PullModel" method.
     ///
     /// - Parameters:
@@ -2431,6 +2519,35 @@ extension Mirmir_V1_Runtime.ClientProtocol {
             metadata: metadata
         )
         return try await self.searchModels(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListModelVariants" method.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listModelVariants<Result>(
+        _ message: Mirmir_V1_ListModelVariantsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Mirmir_V1_ListModelVariantsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Mirmir_V1_ListModelVariantsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listModelVariants(
             request: request,
             options: options,
             onResponse: handleResponse

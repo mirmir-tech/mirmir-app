@@ -7,6 +7,8 @@ struct ModelsTable: View {
     @Environment(AppModel.self) private var model
     let rows: [ModelRow]
     @Binding var selection: String?
+    let choices: VariantChoices
+    let listings: VariantListings
     let download: (String) -> Void
 
     var body: some View {
@@ -20,7 +22,7 @@ struct ModelsTable: View {
             TableColumn("Features") { row in FeatureChips(features: features(row)) }
                 // Room for all three chips; the rest goes to the name.
                 .width(min: 215, ideal: 215, max: 240)
-            TableColumn("Size") { row in size(row) }
+            TableColumn("Size") { row in size(row, app) }
                 .width(80)
             TableColumn("Status") { row in status(row, app) }
                 .width(min: 120, ideal: 170)
@@ -44,7 +46,7 @@ struct ModelsTable: View {
         case .download(let download):
             (download.displayName, download.repoID)
         case .hub(let result):
-            (result.name, (["Hugging Face", result.owner, result.modelClass]).filter { !$0.isEmpty }.joined(separator: " · "))
+            (result.name, (["Hugging Face", result.owner, result.modelClass, result.quantizations]).filter { !$0.isEmpty }.joined(separator: " · "))
         }
         return VStack(alignment: .leading, spacing: 1) {
             Text(title).fontWeight(.medium)
@@ -54,18 +56,41 @@ struct ModelsTable: View {
         .padding(.vertical, 3)
     }
 
-    @ViewBuilder private func size(_ row: ModelRow) -> some View {
+    @ViewBuilder private func size(_ row: ModelRow, _ model: AppModel) -> some View {
         switch row {
         case .model(let local):
             Text(Format.bytes(local.sizeBytes)).font(.mono(12))
         case .download(let download):
             Text(download.totalBytes.map(Format.bytes) ?? "—").font(.mono(12)).foregroundStyle(.secondary)
-        case .hub(let result):
-            // What it needs here, red when it does not fit.
-            Text(result.estimatedRequiredBytes.map(Format.bytes) ?? "—").font(.mono(12))
-                .foregroundStyle(result.memoryFit == .doesNotFit ? Palette.danger : .secondary)
-                .help("Memory it needs on this server")
+        case .hub(let found):
+            // What the chosen quantization downloads, as the local row will
+            // show it; tinted when what it needs here fits tightly or not at
+            // all. A GGUF row
+            // lists its files once shown, for their exact sizes.
+            let result = listings.resolve(found)
+            let variant = choices.variant(of: result)
+            let size = variant?.size ?? result.estimatedWeightBytes.map(VariantSize.estimated) ?? .unknown
+            let fit = variant?.memoryFit ?? result.memoryFit
+            Text(size.label).font(.mono(12))
+                .foregroundStyle(fit.color ?? .secondary)
+                .help(sizeHelp(size, required: variant?.requiredBytes ?? result.estimatedRequiredBytes, fit: fit))
+                .task(id: "\(model.connectionGeneration):\(found.id):\(found.offeredVariants)") { listings.load(found, on: model) }
         }
+    }
+
+    private func sizeHelp(_ size: VariantSize, required: UInt64?, fit: MemoryFit) -> String {
+        let download = switch size {
+        case .exact: "Download size."
+        case .estimated: "Download size, estimated from the parameter count."
+        case .unknown: "Download size unknown."
+        }
+        guard let required else { return download }
+        let more = switch fit {
+        case .doesNotFit: ", more than it has"
+        case .tight: ", leaving little to spare"
+        case .fits, .unknown: ""
+        }
+        return "\(download) Needs \(Format.bytes(required)) of memory on this server\(more)."
     }
 
     @ViewBuilder private func status(_ row: ModelRow, _ model: AppModel) -> some View {
@@ -78,10 +103,7 @@ struct ModelsTable: View {
         case .download(let download):
             ModelStatus(load: nil, download: download, loadability: .loadable, state: .available)
         case .hub(let result):
-            HubAction(
-                result: result, download: model.downloads[result.id],
-                downloaded: model.isDownloaded(result), start: download
-            )
+            HubDownload(result: listings.resolve(result), choices: choices, model: model, start: download)
         }
     }
 }

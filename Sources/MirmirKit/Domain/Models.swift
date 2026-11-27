@@ -56,7 +56,8 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     public let state: LocalModelState
     public let loadability: Loadability
     public let modelClass: String
-    public let encoding: String
+    /// Absent when nothing names the weights' encoding.
+    public let encoding: String?
     public let container: String
     public let sizeBytes: UInt64
     public let features: ModelFeatures
@@ -70,7 +71,9 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     /// for a path, the model directory (or its Hugging Face repository).
     public var displayName: String {
         if repoID.isEmpty { return Conversation.modelName(selector) }
-        return repoID.split(separator: "/").last.map(String.init) ?? repoID
+        let name = repoID.split(separator: "/").last.map(String.init) ?? repoID
+        // A GGUF variant, `repository:VARIANT`, reads "repository · VARIANT".
+        return name.replacingOccurrences(of: ":", with: " · ")
     }
 
     /// A model the server serves but does not list locally, such as a
@@ -79,7 +82,7 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     static func unlisted(selector: String) -> LocalModel {
         LocalModel(
             selector: selector, repoID: "", commit: "", path: selector.hasPrefix("/") ? selector : "",
-            state: .loaded, loadability: .loadable, modelClass: "", encoding: "", container: "",
+            state: .loaded, loadability: .loadable, modelClass: "", encoding: nil, container: "",
             sizeBytes: 0, features: [], imageInput: false, managed: false, recentRank: nil
         )
     }
@@ -92,9 +95,15 @@ public struct LocalModel: Identifiable, Hashable, Sendable {
     public var shortCommit: String { String(commit.prefix(7)) }
 }
 
+/// Whether a model fits this server's memory budget, as the server judges it.
 public enum MemoryFit: Hashable, Sendable {
+    /// It fits with room to spare.
     case fits
+    /// It fits, with little of the budget left over: other work on the
+    /// server, or a longer context, may not fit beside it.
+    case tight
     case doesNotFit
+    /// The server could not tell, or sent a judgement this client predates.
     case unknown
 }
 

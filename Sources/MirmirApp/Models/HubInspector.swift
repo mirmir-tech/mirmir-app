@@ -4,50 +4,64 @@ import SwiftUI
 /// A Hugging Face result: whether it runs on this server, and Download.
 struct HubInspector: View {
     @Environment(AppModel.self) private var model
-    let result: CatalogModel
+    /// As the search found it; its listing sizes the variants exactly.
+    let found: CatalogModel
+    let choices: VariantChoices
+    let listings: VariantListings
     let download: (String) -> Void
 
+    private var result: CatalogModel { listings.resolve(found) }
+
     var body: some View {
+        let result = result
+        let variant = choices.variant(of: result)
+        let pullID = result.pullID(for: variant)
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 InspectorHeader(title: result.name, subtitle: result.id, features: result.features)
                 HStack {
                     HubAction(
-                        result: result, download: model.downloads[result.id],
-                        downloaded: model.isDownloaded(result), start: download
+                        result: result, pullID: pullID, download: model.download(for: pullID),
+                        downloaded: model.isDownloaded(result, variant: variant), start: download,
+                        label: variant.map { "Download \($0.name)" } ?? "Download"
                     )
                         .buttonStyle(.borderedProminent)
                     Spacer()
-                    Link(destination: URL(string: "https://huggingface.co/\(result.id)")!) {
-                        Label("Hugging Face", systemImage: "arrow.up.right.square")
+                    if let page = result.hubPage {
+                        Link(destination: page) {
+                            Label("Hugging Face", systemImage: "arrow.up.right.square")
+                        }
+                        .font(.system(size: 12))
                     }
-                    .font(.system(size: 12))
+                }
+                if !result.variants.isEmpty {
+                    QuantizationSection(
+                        listing: listings.listing(of: found), choices: choices, result: result,
+                        isDownloaded: { model.isDownloaded(result, variant: $0) }
+                    )
                 }
                 InspectorSection("On this server") {
-                    InspectorRow("Memory", value: memory, color: result.memoryFit == .doesNotFit ? Palette.danger : nil)
+                    if result.variants.isEmpty {
+                        InspectorRow("Memory", value: result.memoryFit.summary(needs: result.estimatedRequiredBytes), color: result.memoryFit.color)
+                    }
                     InspectorRow("Compatibility", value: result.compatibility)
-                    if !result.reason.isEmpty { InspectorNote(result.reason) }
+                    // The server judges a GGUF repository by its default
+                    // quantization; another chosen one has its own fit above.
+                    if let reason = result.reason(for: variant) {
+                        InspectorNote(reason)
+                    }
                     if result.gated { InspectorNote("Gated: accept its terms on Hugging Face and add your token in Configuration.") }
                 }
                 InspectorSection("Model") {
                     InspectorRow("Class", value: result.modelClass)
-                    InspectorRow("Encoding", value: result.encoding)
+                    InspectorRow("Encoding", value: result.encoding ?? "—")
                     InspectorRow("Downloads", value: Format.grouped(result.downloads))
                     InspectorRow("Likes", value: Format.grouped(result.likes))
                 }
             }
             .padding(16)
         }
-    }
-
-    private var memory: String {
-        let needs = result.estimatedRequiredBytes.map { "Needs \(Format.bytes($0))" }
-        let fit: String? = switch result.memoryFit {
-        case .fits: "fits"
-        case .doesNotFit: "does not fit"
-        case .unknown: nil
-        }
-        return [needs, fit].compactMap(\.self).joined(separator: ", ")
+        .task(id: "\(model.connectionGeneration):\(found.id):\(found.offeredVariants)") { listings.load(found, on: model) }
     }
 }
 

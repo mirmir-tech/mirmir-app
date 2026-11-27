@@ -30,6 +30,32 @@ struct DecodingTests {
         #expect(model.recentRank == nil)
     }
 
+    /// Each memory fit the server sends keeps its meaning, `tight` (a fit
+    /// with little of the budget to spare) included; a judgement newer than
+    /// this client reads as unknown rather than as a fit.
+    @Test(arguments: [
+        ("fits", MemoryFit.fits),
+        ("tight", .tight),
+        ("does_not_fit", .doesNotFit),
+        ("unknown", .unknown),
+        ("cramped", .unknown),
+        ("", .unknown),
+    ])
+    func memoryFitsDecodeEveryWireValue(wire: String, fit: MemoryFit) {
+        #expect(MemoryFit(wire: wire) == fit)
+    }
+
+    /// A catalog variant and a load estimate carry `tight` through decoding.
+    @Test func tightReachesVariantsAndEstimates() {
+        var variant = Mirmir_V1_CatalogVariant()
+        variant.name = "Q8_0"
+        variant.memoryFit = "tight"
+        #expect(CatalogVariant(variant).memoryFit == .tight)
+        var estimate = Mirmir_V1_ModelMemoryEstimate()
+        estimate.fit = "tight"
+        #expect(MemoryEstimate(estimate).fit == .tight)
+    }
+
     @Test func selectorFallsBackToID() {
         var wire = Mirmir_V1_LocalModelInfo()
         wire.id = "local-path-model"

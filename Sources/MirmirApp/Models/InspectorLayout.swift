@@ -75,6 +75,10 @@ struct InspectorRow: View {
                 .foregroundStyle(color ?? .primary)
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
+                // Selectable text draws a little wider than it measures and
+                // was cut short with room to spare; its own height lets it
+                // keep the width it needs and still wrap when it must.
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

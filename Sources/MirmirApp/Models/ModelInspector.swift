@@ -55,7 +55,7 @@ struct ModelInspector: View {
     private var facts: some View {
         InspectorSection("Model") {
             InspectorRow("Class", value: local.modelClass)
-            InspectorRow("Encoding", value: local.encoding)
+            InspectorRow("Encoding", value: local.encoding ?? "—")
             InspectorRow("Size", value: Format.bytes(local.sizeBytes))
             if let inspection = model.inspections[local.selector], inspection.maxInputTokens > 0 {
                 InspectorRow("Max input", value: "\(Format.grouped(inspection.maxInputTokens)) tokens")

@@ -21,7 +21,7 @@ Locales: `en-US` (primary) and `pl`.
 
 - App and helper sandboxed; the helper carries only `app-sandbox` and
   `inherit`; no `get-task-allow` (`scripts/release/check-sandbox.sh`).
-- arm64 only, macOS 27, hardened runtime, `LSApplicationCategoryType`
+- arm64 only, macOS 26.2, hardened runtime, `LSApplicationCategoryType`
   developer tools, `NSLocalNetworkUsageDescription` present.
 - Guideline 2.4.5: no own updater, no login item, nothing installed outside
   the bundle, no root, the helper runs from `Contents/Helpers`.

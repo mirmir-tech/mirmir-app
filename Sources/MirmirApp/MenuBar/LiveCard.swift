@@ -15,7 +15,7 @@ struct LiveCard: View {
                     Text(model.primaryModel?.displayName ?? "No model loaded")
                         .font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     if let loaded = model.primaryModel {
-                        Text([loaded.encoding, loaded.modelClass].filter { !$0.isEmpty }.joined(separator: " · "))
+                        Text([loaded.encoding, loaded.modelClass].compactMap(\.self).filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                 }

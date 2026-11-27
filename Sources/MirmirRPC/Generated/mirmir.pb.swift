@@ -382,10 +382,15 @@ public nonisolated struct Mirmir_V1_LocalModelInfo: @unchecked Sendable {
     set {_uniqueStorage()._container = newValue}
   }
 
+  /// Absent when nothing names the weights' encoding.
   public var encoding: String {
-    get {_storage._encoding}
+    get {_storage._encoding ?? String()}
     set {_uniqueStorage()._encoding = newValue}
   }
+  /// Returns true if `encoding` has been explicitly set.
+  public var hasEncoding: Bool {_storage._encoding != nil}
+  /// Clears the value of `encoding`. Subsequent reads from it will return its default value.
+  public mutating func clearEncoding() {_uniqueStorage()._encoding = nil}
 
   public var metalCompatibility: String {
     get {_storage._metalCompatibility}
@@ -1067,10 +1072,15 @@ public nonisolated struct Mirmir_V1_CatalogModel: @unchecked Sendable {
     set {_uniqueStorage()._container = newValue}
   }
 
+  /// Absent when nothing names the weights' encoding.
   public var encoding: String {
-    get {_storage._encoding}
+    get {_storage._encoding ?? String()}
     set {_uniqueStorage()._encoding = newValue}
   }
+  /// Returns true if `encoding` has been explicitly set.
+  public var hasEncoding: Bool {_storage._encoding != nil}
+  /// Clears the value of `encoding`. Subsequent reads from it will return its default value.
+  public mutating func clearEncoding() {_uniqueStorage()._encoding = nil}
 
   public var metalCompatibility: String {
     get {_storage._metalCompatibility}
@@ -1100,11 +1110,106 @@ public nonisolated struct Mirmir_V1_CatalogModel: @unchecked Sendable {
   /// Clears the value of `preflightError`. Subsequent reads from it will return its default value.
   public mutating func clearPreflightError() {_uniqueStorage()._preflightError = nil}
 
+  /// A GGUF repository's quantizations, fewest bits per weight first; empty
+  /// for other repositories. Pull one as `id:name`.
+  public var variants: [Mirmir_V1_CatalogVariant] {
+    get {_storage._variants}
+    set {_uniqueStorage()._variants = newValue}
+  }
+
+  /// The variant a pull of `id` alone takes; the row's size and memory fit
+  /// are its own.
+  public var defaultVariant: String {
+    get {_storage._defaultVariant ?? String()}
+    set {_uniqueStorage()._defaultVariant = newValue}
+  }
+  /// Returns true if `defaultVariant` has been explicitly set.
+  public var hasDefaultVariant: Bool {_storage._defaultVariant != nil}
+  /// Clears the value of `defaultVariant`. Subsequent reads from it will return its default value.
+  public mutating func clearDefaultVariant() {_uniqueStorage()._defaultVariant = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Mirmir_V1_CatalogVariant: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  /// "exact" from the listed files, "estimated" from the parameter count, or
+  /// "unknown"; the size includes the vision tower when it is offered.
+  public var sizeKind: String = String()
+
+  public var weightBytes: UInt64 {
+    get {_weightBytes ?? 0}
+    set {_weightBytes = newValue}
+  }
+  /// Returns true if `weightBytes` has been explicitly set.
+  public var hasWeightBytes: Bool {self._weightBytes != nil}
+  /// Clears the value of `weightBytes`. Subsequent reads from it will return its default value.
+  public mutating func clearWeightBytes() {self._weightBytes = nil}
+
+  public var requiredBytes: UInt64 {
+    get {_requiredBytes ?? 0}
+    set {_requiredBytes = newValue}
+  }
+  /// Returns true if `requiredBytes` has been explicitly set.
+  public var hasRequiredBytes: Bool {self._requiredBytes != nil}
+  /// Clears the value of `requiredBytes`. Subsequent reads from it will return its default value.
+  public mutating func clearRequiredBytes() {self._requiredBytes = nil}
+
+  public var memoryFit: String = String()
+
+  public var downloaded: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _weightBytes: UInt64? = nil
+  fileprivate var _requiredBytes: UInt64? = nil
+}
+
+public nonisolated struct Mirmir_V1_ListModelVariantsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var repoID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Mirmir_V1_ListModelVariantsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// With the exact sizes of the listed files.
+  public var variants: [Mirmir_V1_CatalogVariant] = []
+
+  public var defaultVariant: String {
+    get {_defaultVariant ?? String()}
+    set {_defaultVariant = newValue}
+  }
+  /// Returns true if `defaultVariant` has been explicitly set.
+  public var hasDefaultVariant: Bool {self._defaultVariant != nil}
+  /// Clears the value of `defaultVariant`. Subsequent reads from it will return its default value.
+  public mutating func clearDefaultVariant() {self._defaultVariant = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _defaultVariant: String? = nil
 }
 
 public nonisolated struct Mirmir_V1_PullModelRequest: Sendable {
@@ -3008,7 +3113,7 @@ nonisolated extension Mirmir_V1_LocalModelInfo: SwiftProtobuf.Message, SwiftProt
     var _vision: Bool = false
     var _ecosystem: String = String()
     var _container: String = String()
-    var _encoding: String = String()
+    var _encoding: String? = nil
     var _metalCompatibility: String = String()
     var _cudaCompatibility: String = String()
 
@@ -3162,9 +3267,9 @@ nonisolated extension Mirmir_V1_LocalModelInfo: SwiftProtobuf.Message, SwiftProt
       if !_storage._container.isEmpty {
         try visitor.visitSingularStringField(value: _storage._container, fieldNumber: 21)
       }
-      if !_storage._encoding.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._encoding, fieldNumber: 22)
-      }
+      try { if let v = _storage._encoding {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 22)
+      } }()
       if !_storage._metalCompatibility.isEmpty {
         try visitor.visitSingularStringField(value: _storage._metalCompatibility, fieldNumber: 23)
       }
@@ -4117,7 +4222,7 @@ nonisolated extension Mirmir_V1_SearchModelsResponse: SwiftProtobuf.Message, Swi
 
 nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CatalogModel"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}downloads\0\u{1}likes\0\u{1}gated\0\u{3}model_class\0\u{1}compatibility\0\u{3}memory_fit\0\u{3}estimated_weight_bytes\0\u{3}estimated_required_bytes\0\u{3}budget_bytes\0\u{1}confidence\0\u{1}reason\0\u{1}downloaded\0\u{3}local_source\0\u{1}library\0\u{3}tool_use\0\u{1}thinking\0\u{1}vision\0\u{1}ecosystem\0\u{1}container\0\u{1}encoding\0\u{3}metal_compatibility\0\u{3}cuda_compatibility\0\u{3}preflight_bytes\0\u{3}preflight_error\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}downloads\0\u{1}likes\0\u{1}gated\0\u{3}model_class\0\u{1}compatibility\0\u{3}memory_fit\0\u{3}estimated_weight_bytes\0\u{3}estimated_required_bytes\0\u{3}budget_bytes\0\u{1}confidence\0\u{1}reason\0\u{1}downloaded\0\u{3}local_source\0\u{1}library\0\u{3}tool_use\0\u{1}thinking\0\u{1}vision\0\u{1}ecosystem\0\u{1}container\0\u{1}encoding\0\u{3}metal_compatibility\0\u{3}cuda_compatibility\0\u{3}preflight_bytes\0\u{3}preflight_error\0\u{1}variants\0\u{3}default_variant\0")
 
   fileprivate class _StorageClass {
     var _id: String = String()
@@ -4140,11 +4245,13 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
     var _vision: Bool = false
     var _ecosystem: String = String()
     var _container: String = String()
-    var _encoding: String = String()
+    var _encoding: String? = nil
     var _metalCompatibility: String = String()
     var _cudaCompatibility: String = String()
     var _preflightBytes: UInt64? = nil
     var _preflightError: String? = nil
+    var _variants: [Mirmir_V1_CatalogVariant] = []
+    var _defaultVariant: String? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -4180,6 +4287,8 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
       _cudaCompatibility = source._cudaCompatibility
       _preflightBytes = source._preflightBytes
       _preflightError = source._preflightError
+      _variants = source._variants
+      _defaultVariant = source._defaultVariant
     }
   }
 
@@ -4223,6 +4332,8 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
         case 23: try { try decoder.decodeSingularStringField(value: &_storage._cudaCompatibility) }()
         case 24: try { try decoder.decodeSingularUInt64Field(value: &_storage._preflightBytes) }()
         case 25: try { try decoder.decodeSingularStringField(value: &_storage._preflightError) }()
+        case 26: try { try decoder.decodeRepeatedMessageField(value: &_storage._variants) }()
+        case 27: try { try decoder.decodeSingularStringField(value: &_storage._defaultVariant) }()
         default: break
         }
       }
@@ -4295,9 +4406,9 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
       if !_storage._container.isEmpty {
         try visitor.visitSingularStringField(value: _storage._container, fieldNumber: 20)
       }
-      if !_storage._encoding.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._encoding, fieldNumber: 21)
-      }
+      try { if let v = _storage._encoding {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 21)
+      } }()
       if !_storage._metalCompatibility.isEmpty {
         try visitor.visitSingularStringField(value: _storage._metalCompatibility, fieldNumber: 22)
       }
@@ -4309,6 +4420,12 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
       } }()
       try { if let v = _storage._preflightError {
         try visitor.visitSingularStringField(value: v, fieldNumber: 25)
+      } }()
+      if !_storage._variants.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._variants, fieldNumber: 26)
+      }
+      try { if let v = _storage._defaultVariant {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 27)
       } }()
     }
     try unknownFields.traverse(visitor: &visitor)
@@ -4344,10 +4461,140 @@ nonisolated extension Mirmir_V1_CatalogModel: SwiftProtobuf.Message, SwiftProtob
         if _storage._cudaCompatibility != rhs_storage._cudaCompatibility {return false}
         if _storage._preflightBytes != rhs_storage._preflightBytes {return false}
         if _storage._preflightError != rhs_storage._preflightError {return false}
+        if _storage._variants != rhs_storage._variants {return false}
+        if _storage._defaultVariant != rhs_storage._defaultVariant {return false}
         return true
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Mirmir_V1_CatalogVariant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".CatalogVariant"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{3}size_kind\0\u{3}weight_bytes\0\u{3}required_bytes\0\u{3}memory_fit\0\u{1}downloaded\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.sizeKind) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self._weightBytes) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self._requiredBytes) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.memoryFit) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.downloaded) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.sizeKind.isEmpty {
+      try visitor.visitSingularStringField(value: self.sizeKind, fieldNumber: 2)
+    }
+    try { if let v = self._weightBytes {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._requiredBytes {
+      try visitor.visitSingularUInt64Field(value: v, fieldNumber: 4)
+    } }()
+    if !self.memoryFit.isEmpty {
+      try visitor.visitSingularStringField(value: self.memoryFit, fieldNumber: 5)
+    }
+    if self.downloaded != false {
+      try visitor.visitSingularBoolField(value: self.downloaded, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Mirmir_V1_CatalogVariant, rhs: Mirmir_V1_CatalogVariant) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.sizeKind != rhs.sizeKind {return false}
+    if lhs._weightBytes != rhs._weightBytes {return false}
+    if lhs._requiredBytes != rhs._requiredBytes {return false}
+    if lhs.memoryFit != rhs.memoryFit {return false}
+    if lhs.downloaded != rhs.downloaded {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Mirmir_V1_ListModelVariantsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListModelVariantsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}repo_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.repoID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.repoID.isEmpty {
+      try visitor.visitSingularStringField(value: self.repoID, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Mirmir_V1_ListModelVariantsRequest, rhs: Mirmir_V1_ListModelVariantsRequest) -> Bool {
+    if lhs.repoID != rhs.repoID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Mirmir_V1_ListModelVariantsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListModelVariantsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}variants\0\u{3}default_variant\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.variants) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self._defaultVariant) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.variants.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.variants, fieldNumber: 1)
+    }
+    try { if let v = self._defaultVariant {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Mirmir_V1_ListModelVariantsResponse, rhs: Mirmir_V1_ListModelVariantsResponse) -> Bool {
+    if lhs.variants != rhs.variants {return false}
+    if lhs._defaultVariant != rhs._defaultVariant {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

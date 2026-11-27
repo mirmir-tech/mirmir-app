@@ -20,6 +20,10 @@ public final class AppModel {
 
     // Connection and live data for the current instance.
     public internal(set) var phase: ConnectionPhase = .connecting
+    /// Counts connections: each switch, address edit, reconnect or retry
+    /// gets a new value, so what one connection's server answered (variant
+    /// listings, say) is never kept for another.
+    public internal(set) var connectionGeneration: UInt64 = 0
     public internal(set) var telemetry: TelemetrySnapshot?
     public internal(set) var history: TelemetryHistory = .empty
     public internal(set) var sparkline: [Double] = []
@@ -143,6 +147,7 @@ public final class AppModel {
         sessionTask?.cancel()
         connection?.close()
         resetLiveState()
+        connectionGeneration &+= 1
         phase = .connecting
         let instance = currentInstance
         sessionTask = Task { [weak self] in await self?.session(for: instance) }

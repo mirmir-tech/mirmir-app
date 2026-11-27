@@ -37,7 +37,7 @@ struct OverviewView: View {
         var parts = [model.currentInstance.name]
         if let loaded = model.primaryModel {
             parts.append(loaded.displayName)
-            if !loaded.encoding.isEmpty { parts.append(loaded.encoding) }
+            if let encoding = loaded.encoding, !encoding.isEmpty { parts.append(encoding) }
         } else {
             parts.append("No model loaded")
         }

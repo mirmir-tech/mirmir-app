@@ -22,6 +22,7 @@ extension MemoryFit {
     init(wire: String) {
         switch wire {
         case "fits": self = .fits
+        case "tight": self = .tight
         case "does_not_fit": self = .doesNotFit
         default: self = .unknown
         }
@@ -97,7 +98,7 @@ extension LocalModel {
             state: LocalModelState(wire: wire.state),
             loadability: wire.loadable ? .loadable : .unavailable(reason: wire.loadUnavailableReason),
             modelClass: wire.modelClass,
-            encoding: wire.encoding,
+            encoding: wire.hasEncoding ? wire.encoding : nil,
             container: wire.container,
             sizeBytes: wire.sizeBytes,
             features: ModelFeatures(toolUse: wire.toolUse, thinking: wire.thinking, vision: wire.vision),
@@ -191,7 +192,10 @@ extension CatalogModel {
             estimatedRequiredBytes: wire.hasEstimatedRequiredBytes ? wire.estimatedRequiredBytes : nil,
             reason: wire.reason, downloaded: wire.downloaded,
             features: ModelFeatures(toolUse: wire.toolUse, thinking: wire.thinking, vision: wire.vision),
-            encoding: wire.encoding
+            encoding: wire.hasEncoding ? wire.encoding : nil,
+            variants: wire.variants.map(CatalogVariant.init),
+            defaultVariant: wire.hasDefaultVariant ? wire.defaultVariant : nil,
+            estimatedWeightBytes: wire.hasEstimatedWeightBytes ? wire.estimatedWeightBytes : nil
         )
     }
 }

@@ -4,7 +4,7 @@
 #   scripts/release.sh [--skip-notarize]
 #   scripts/release.sh --app-store [--upload]
 #
-#   MIRMIR_APP_VERSION     marketing version (default 0.6.2)
+#   MIRMIR_APP_VERSION     marketing version (default 0.7.0)
 #   MIRMIR_SIGN_IDENTITY   code signing identity (default "Developer ID Application")
 #   MIRMIR_TEAM_ID         team of that identity (default 5AH2Q9L8R2)
 #   MIRMIR_NOTARY_PROFILE  notarytool keychain profile (default mirmir-notary)
@@ -57,7 +57,7 @@ for argument in "$@"; do
     esac
 done
 
-version="${MIRMIR_APP_VERSION:-0.6.2}"
+version="${MIRMIR_APP_VERSION:-0.7.0}"
 build_number="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 identity="${MIRMIR_SIGN_IDENTITY:-Developer ID Application}"
 team="${MIRMIR_TEAM_ID:-5AH2Q9L8R2}"
@@ -124,8 +124,10 @@ done < <(find "$app/Contents" -type f -print0)
 lipo -archs "$app/Contents/MacOS/Mirmir" | grep -qx arm64 || { echo "error: the app is not arm64 only" >&2; exit 1; }
 
 step "Drawing the disk image background"
-swift scripts/dmg/background.swift "$work/background.png" 1 "$version"
-swift scripts/dmg/background.swift "$work/background@2x.png" 2 "$version"
+macos_version="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$app/Contents/Info.plist")"
+[[ -n "$macos_version" ]] || fail "LSMinimumSystemVersion is missing from $app/Contents/Info.plist"
+swift scripts/dmg/background.swift "$work/background.png" 1 "$version" "$macos_version"
+swift scripts/dmg/background.swift "$work/background@2x.png" 2 "$version" "$macos_version"
 tiffutil -cathidpicheck "$work/background.png" "$work/background@2x.png" -out "$work/background.tiff" >/dev/null
 
 step "Assembling the disk image"
