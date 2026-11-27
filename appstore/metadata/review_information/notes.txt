@@ -19,5 +19,5 @@ The app accepts incoming connections through its bundled helper. The helper is s
 
 Downloaded files are model weights (data). The app does not download or run executable code. Metal kernels are compiled at run time from Metal source that ships inside the app.
 
-Requirements: Apple silicon, macOS 27 or later. Models need memory: Qwen/Qwen3-4B needs about 10 GB free.
+Requirements: Apple silicon, macOS 26.2 or later. Models need memory: Qwen/Qwen3-4B needs about 10 GB free.
 

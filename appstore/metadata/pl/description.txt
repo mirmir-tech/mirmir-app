@@ -17,7 +17,7 @@ Twoje pytania, czaty i modele zostają na Twoim Macu albo na serwerach, które s
 
 WARTO WIEDZIEĆ
 
-• Wymaga Maca z procesorem Apple i systemu macOS 27 lub nowszego.
+• Wymaga Maca z procesorem Apple i systemu macOS 26.2 lub nowszego.
 • Modele językowe są duże. Małe działają na każdym Macu z procesorem Apple, większe potrzebują więcej pamięci i miejsca na dysku. MiRMiR pokazuje szacowane zużycie pamięci, zanim cokolwiek załaduje.
 • Aplikacja działa w piaskownicy macOS i czyta tylko te foldery z modelami, do których dasz jej dostęp w Ustawieniach.
 • MiRMiR jest projektem open source (Apache 2.0) i wciąż jest młody. Nie każdy model został już przetestowany, a obsługa nowych przychodzi z aktualizacjami.

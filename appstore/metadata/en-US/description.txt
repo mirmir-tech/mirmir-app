@@ -17,7 +17,7 @@ Your prompts, chats and models stay on your Mac, or on servers you add yourself.
 
 GOOD TO KNOW
 
-• Requires a Mac with Apple silicon and macOS 27 or later.
+• Requires a Mac with Apple silicon and macOS 26.2 or later.
 • Language models are large. Small ones run on any Apple silicon Mac; bigger ones need more memory and disk space. MiRMiR shows a memory estimate before it loads anything.
 • The app runs in the macOS sandbox and reads only the model folders you grant in Settings.
 • MiRMiR is open source (Apache 2.0) and still young. Not every model has been tested yet, and support for new ones arrives with updates.
