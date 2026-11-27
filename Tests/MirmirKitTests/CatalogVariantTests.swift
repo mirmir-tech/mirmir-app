@@ -78,3 +78,45 @@ struct CatalogVariantTests {
     }
     #endif
 }
+
+/// The server's reason judges the variant its search would download: a
+/// listing that names another default keeps the reason with the variant it
+/// was computed for, not with the new default.
+struct CatalogReasonTests {
+    private func variant(_ name: String) -> CatalogVariant {
+        CatalogVariant(name: name, size: .exact(9_000), requiredBytes: 9_000, memoryFit: .tight, downloaded: false)
+    }
+
+    private func repository(reason: String) -> CatalogModel {
+        var result = CatalogModel(
+            id: "owner/model-GGUF", downloads: 0, likes: 0, gated: false, modelClass: "",
+            compatibility: "supported", memoryFit: .tight, estimatedRequiredBytes: nil, reason: reason,
+            downloaded: false, features: [], encoding: nil
+        )
+        result.variants = [variant("Q4_0"), variant("Q8_0")]
+        result.defaultVariant = "Q8_0"
+        return result
+    }
+
+    @Test func keepsTheReasonWithTheVariantItJudged() {
+        let found = repository(reason: "Q8_0 needs 9 GB")
+        #expect(found.reason(for: variant("Q8_0")) == "Q8_0 needs 9 GB")
+        #expect(found.reason(for: variant("Q4_0")) == nil)
+        let listed = found.listing(ModelVariants(variants: [variant("Q4_0"), variant("Q8_0")], defaultVariant: "Q4_0"))
+        #expect(listed.defaultVariant == "Q4_0")
+        #expect(listed.reasonVariant == "Q8_0")
+        #expect(listed.reason(for: listed.defaultChoice) == nil)
+        #expect(listed.reason(for: variant("Q8_0")) == "Q8_0 needs 9 GB")
+        // Listed again, it still judges what the search judged.
+        let relisted = listed.listing(ModelVariants(variants: [variant("Q4_0")], defaultVariant: "Q4_0"))
+        #expect(relisted.reasonVariant == "Q8_0")
+    }
+
+    @Test func aRepositoryWithoutVariantsKeepsItsReason() {
+        var plain = repository(reason: "needs 9 GB")
+        plain.variants = []
+        plain.defaultVariant = nil
+        #expect(plain.reason(for: nil) == "needs 9 GB")
+        #expect(repository(reason: "").reason(for: variant("Q8_0")) == nil)
+    }
+}

@@ -30,3 +30,16 @@ struct CancellationTests {
         #expect(model.notice == "Inspecting x failed: boom")
     }
 }
+
+/// A removal the server refuses (a model loaded from a cache it would take,
+/// a transfer in progress) is a failed precondition: reported with the
+/// server's own words, not as a lost connection.
+struct RefusalTests {
+    @Test func aFailedPreconditionKeepsTheServersMessage() {
+        let message = "Owner/Repo-GGUF is loaded from the cache this removal takes; unload it first"
+        let error = ConnectionError.wrap(RPCError(code: .failedPrecondition, message: message))
+        #expect(error == .rpc(code: .failedPrecondition, message: message))
+        #expect(error.errorDescription == message)
+        #expect(!error.isUnreachable)
+    }
+}

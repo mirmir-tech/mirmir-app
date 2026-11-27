@@ -47,8 +47,8 @@ struct HubInspector: View {
                     InspectorRow("Compatibility", value: result.compatibility)
                     // The server judges a GGUF repository by its default
                     // quantization; another chosen one has its own fit above.
-                    if !result.reason.isEmpty, result.variants.isEmpty || variant?.name == result.defaultVariant {
-                        InspectorNote(result.reason)
+                    if let reason = result.reason(for: variant) {
+                        InspectorNote(reason)
                     }
                     if result.gated { InspectorNote("Gated: accept its terms on Hugging Face and add your token in Configuration.") }
                 }

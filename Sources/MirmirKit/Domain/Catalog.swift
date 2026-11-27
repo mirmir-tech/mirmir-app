@@ -24,6 +24,9 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
     /// The weights to download, estimated from the parameter count; a GGUF
     /// repository's variants carry their own sizes.
     public internal(set) var estimatedWeightBytes: UInt64? = nil
+    /// The variant `reason` judges: the search's default, which a listing's
+    /// own default does not replace.
+    var judged = JudgedVariant.theDefault
 
     /// The variant a download takes when none is chosen.
     public var defaultChoice: CatalogVariant? {
@@ -34,15 +37,41 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
     /// default those sizes give.
     public func listing(_ listed: ModelVariants) -> CatalogModel {
         var result = self
+        result.judged = .variant(reasonVariant)
         result.variants = listed.variants
         result.defaultVariant = listed.defaultVariant
         return result
+    }
+
+    /// The variant the server judged in `reason`.
+    public var reasonVariant: String? {
+        switch judged {
+        case .theDefault: defaultVariant
+        case .variant(let name): name
+        }
+    }
+
+    /// The server's reason, where it is `variant`'s: a GGUF repository is
+    /// judged by the variant it would download by default, and another
+    /// variant's fit is its own.
+    public func reason(for variant: CatalogVariant?) -> String? {
+        guard !reason.isEmpty else { return nil }
+        guard !variants.isEmpty else { return reason }
+        return variant?.name == reasonVariant ? reason : nil
     }
 
     /// What `PullModel` takes for `variant`: `id:name`, or `id` alone.
     public func pullID(for variant: CatalogVariant?) -> String {
         variant.map { "\(id):\($0.name)" } ?? id
     }
+}
+
+/// Which variant a search result's reason judges.
+enum JudgedVariant: Hashable, Sendable {
+    /// The result's default, as the search gave it.
+    case theDefault
+    /// The default the search gave, kept once a listing replaced it.
+    case variant(String?)
 }
 
 /// How much is known of a GGUF variant's size.
