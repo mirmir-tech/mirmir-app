@@ -119,4 +119,16 @@ struct CatalogReasonTests {
         #expect(plain.reason(for: nil) == "needs 9 GB")
         #expect(repository(reason: "").reason(for: variant("Q8_0")) == nil)
     }
+
+    @Test func anUnsupportedGgufRepositoryKeepsItsReasonAcrossVariants() {
+        var unsupported = CatalogModel(
+            id: "owner/bert-GGUF", downloads: 0, likes: 0, gated: false, modelClass: "bert",
+            compatibility: "unsupported", memoryFit: .fits, estimatedRequiredBytes: nil,
+            reason: "architecture is not supported", downloaded: false, features: [], encoding: nil
+        )
+        unsupported.variants = [variant("Q4_0"), variant("Q8_0")]
+        unsupported.defaultVariant = "Q8_0"
+        #expect(unsupported.reason(for: variant("Q4_0")) == "architecture is not supported")
+        #expect(unsupported.reason(for: variant("Q8_0")) == "architecture is not supported")
+    }
 }

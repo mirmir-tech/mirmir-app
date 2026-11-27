@@ -25,7 +25,30 @@ struct VariantListingsTests {
     }
 
     private func listed(_ name: String) -> ModelVariants {
-        ModelVariants(variants: [], defaultVariant: name)
+        let variant = CatalogVariant(
+            name: name, size: .exact(4_000), requiredBytes: 4_000, memoryFit: .fits, downloaded: false
+        )
+        return ModelVariants(variants: [variant], defaultVariant: name)
+    }
+
+    @Test func anEmptyListingFailsAndCanBeRetried() async throws {
+        let listings = VariantListings()
+        let pending = Pending()
+        let first = listings.load("owner/repo", generation: 1, fetch: { try await pending.fetch() })
+        await Task.yield()
+        pending.reply(ModelVariants(variants: [], defaultVariant: nil))
+        await first?.value
+        if case .failed = listings.listing(of: "owner/repo") {
+            // Expected: empty listings do not wipe search estimates permanently.
+        } else {
+            Issue.record("expected failed state for empty listing")
+        }
+        let retry = listings.load("owner/repo", generation: 1, fetch: { try await pending.fetch() })
+        #expect(retry != nil)
+        await Task.yield()
+        pending.reply(listed("Q4_K_M"))
+        await retry?.value
+        #expect(listings.listing(of: "owner/repo") == .listed(listed("Q4_K_M")))
     }
 
     /// A on generation 1, B on 2, A again on 3: the first reply from A,

@@ -48,7 +48,10 @@ public final class VariantListings {
         return Task { @MainActor [weak self] in
             let reply: Listing
             do {
-                reply = .listed(try await fetch())
+                let listed = try await fetch()
+                reply = listed.variants.isEmpty
+                    ? .failed("No quantizations were listed for \(repository).")
+                    : .listed(listed)
             } catch {
                 reply = .failed(error.localizedDescription)
             }

@@ -53,10 +53,11 @@ public struct CatalogModel: Identifiable, Hashable, Sendable {
 
     /// The server's reason, where it is `variant`'s: a GGUF repository is
     /// judged by the variant it would download by default, and another
-    /// variant's fit is its own.
+    /// variant's fit is its own — except when the whole repository is
+    /// unsupported, which applies to every variant.
     public func reason(for variant: CatalogVariant?) -> String? {
         guard !reason.isEmpty else { return nil }
-        guard !variants.isEmpty else { return reason }
+        guard !variants.isEmpty, compatibility != "unsupported" else { return reason }
         return variant?.name == reasonVariant ? reason : nil
     }
 
