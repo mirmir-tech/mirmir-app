@@ -1,6 +1,6 @@
 // Draws the disk image window's background at one scale.
 //
-//   swift scripts/dmg/background.swift <out.png> <scale> <version>
+//   swift scripts/dmg/background.swift <out.png> <scale> <version> [macos-version]
 //
 // The layout matches scripts/release.sh: a 660×400 pt window with the app
 // icon centred at (170, 190) and Applications at (490, 190), 128 pt icons.
@@ -10,12 +10,13 @@ import AppKit
 import CoreText
 
 let arguments = CommandLine.arguments
-guard arguments.count == 4, let scale = Double(arguments[2]) else {
-    FileHandle.standardError.write(Data("usage: background.swift <out.png> <scale> <version>\n".utf8))
+guard (arguments.count == 4 || arguments.count == 5), let scale = Double(arguments[2]) else {
+    FileHandle.standardError.write(Data("usage: background.swift <out.png> <scale> <version> [macos-version]\n".utf8))
     exit(2)
 }
 let output = URL(fileURLWithPath: arguments[1])
 let version = arguments[3]
+let macosVersion = arguments.count == 5 ? arguments[4] : "26.2"
 
 let size = CGSize(width: 660, height: 400)
 let appCenter = CGPoint(x: 170, y: 190)
@@ -94,7 +95,7 @@ func draw(_ text: String, size: CGFloat, weight: NSFont.Weight, color: CGColor, 
 }
 draw("MIRMIR FOR MAC · \(version)", size: 11, weight: .semibold, color: signal, centerX: size.width / 2, baseline: 44, mono: true)
 draw("Drag Mirmir to Applications", size: 20, weight: .semibold, color: ink, centerX: size.width / 2, baseline: 74)
-draw("Includes the mirmir runtime · Apple silicon · macOS 27 or later", size: 12, weight: .regular, color: muted, centerX: size.width / 2, baseline: 368)
+draw("Includes the mirmir runtime · Apple silicon · macOS \(macosVersion) or later", size: 12, weight: .regular, color: muted, centerX: size.width / 2, baseline: 368)
 
 let image = context.makeImage()!
 let rep = NSBitmapImageRep(cgImage: image)

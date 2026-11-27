@@ -124,8 +124,10 @@ done < <(find "$app/Contents" -type f -print0)
 lipo -archs "$app/Contents/MacOS/Mirmir" | grep -qx arm64 || { echo "error: the app is not arm64 only" >&2; exit 1; }
 
 step "Drawing the disk image background"
-swift scripts/dmg/background.swift "$work/background.png" 1 "$version"
-swift scripts/dmg/background.swift "$work/background@2x.png" 2 "$version"
+macos_version="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$app/Contents/Info.plist")"
+[[ -n "$macos_version" ]] || fail "LSMinimumSystemVersion is missing from $app/Contents/Info.plist"
+swift scripts/dmg/background.swift "$work/background.png" 1 "$version" "$macos_version"
+swift scripts/dmg/background.swift "$work/background@2x.png" 2 "$version" "$macos_version"
 tiffutil -cathidpicheck "$work/background.png" "$work/background@2x.png" -out "$work/background.tiff" >/dev/null
 
 step "Assembling the disk image"
